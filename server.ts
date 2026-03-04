@@ -1193,7 +1193,7 @@ async function startServer() {
     );
   };
 
-  // Cleanup old recordings every minute (for testing)
+  // Cleanup old recordings after 48 hours
   setInterval(async () => {
     if (getDriveConnectionMode() === "none") return;
     
@@ -1203,11 +1203,10 @@ async function startServer() {
       activeMode = authContext.mode;
       const drive = google.drive({ version: 'v3', auth: authContext.auth });
       
-      // 5 minutes ago for testing
-      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
       
       const response = await drive.files.list({
-        q: `appProperties has { key='source' and value='consultation-system' } and createdTime < '${fiveMinutesAgo}'`,
+        q: `appProperties has { key='source' and value='consultation-system' } and createdTime < '${fortyEightHoursAgo}'`,
         fields: 'files(id, name)',
         supportsAllDrives: true,
       });
@@ -1226,7 +1225,7 @@ async function startServer() {
         fs.unlinkSync(TOKEN_PATH);
       }
     }
-  }, 60 * 1000); // Run every minute
+  }, 60 * 60 * 1000); // Run every hour
 
   app.get("/api/auth/google/url", (req, res) => {
     try {
