@@ -27,6 +27,16 @@ interface LiveQueueItem {
   time_period?: string | null;
 }
 
+type KeyboardField = "identifier" | "studentName" | "studentEmail";
+
+const KEYBOARD_ROWS = [
+  ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"],
+  ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
+  ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
+  ["z", "x", "c", "v", "b", "n", "m", "-", "_"],
+  ["@", ".", "/"],
+];
+
 export default function Login() {
   const [inputMode, setInputMode] = useState<"scan" | "manual">("scan");
   
@@ -38,6 +48,9 @@ export default function Login() {
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const [activeField, setActiveField] = useState<KeyboardField>("identifier");
+  const [capsLock, setCapsLock] = useState(true);
   const navigate = useNavigate();
 
   const [faculty, setFaculty] = useState<Faculty[]>([]);
@@ -210,10 +223,54 @@ export default function Login() {
     return "No availability set for today";
   };
 
+  const setFieldValue = (field: KeyboardField, value: string) => {
+    if (field === "identifier") {
+      setIdentifier(value);
+      return;
+    }
+    if (field === "studentName") {
+      setStudentName(value);
+      return;
+    }
+    setStudentEmail(value);
+  };
+
+  const getFieldValue = (field: KeyboardField) => {
+    if (field === "identifier") return identifier;
+    if (field === "studentName") return studentName;
+    return studentEmail;
+  };
+
+  const openKeyboardForField = (field: KeyboardField) => {
+    setActiveField(field);
+    setKeyboardOpen(true);
+  };
+
+  const handleKeyboardKey = (key: string) => {
+    const current = getFieldValue(activeField);
+    const value = capsLock ? key.toUpperCase() : key;
+    setFieldValue(activeField, `${current}${value}`);
+  };
+
+  const handleKeyboardBackspace = () => {
+    const current = getFieldValue(activeField);
+    setFieldValue(activeField, current.slice(0, -1));
+  };
+
+  const handleKeyboardSpace = () => {
+    const current = getFieldValue(activeField);
+    setFieldValue(activeField, `${current} `);
+  };
+
+  const handleKeyboardClear = () => {
+    setFieldValue(activeField, "");
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
+    setKeyboardOpen(false);
 
     try {
       if (inputMode === "scan") {
@@ -363,7 +420,7 @@ export default function Login() {
               <div className="flex p-1 bg-neutral-100 rounded-xl">
                 <button
                   type="button"
-                  onClick={() => { setInputMode("scan"); setError(""); }}
+                  onClick={() => { setInputMode("scan"); setError(""); setActiveField("identifier"); }}
                   className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-lg transition-all ${
                     inputMode === "scan" ? "bg-white text-emerald-700 shadow-sm" : "text-neutral-500 hover:text-neutral-700"
                   }`}
@@ -372,7 +429,7 @@ export default function Login() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setInputMode("manual"); setError(""); }}
+                  onClick={() => { setInputMode("manual"); setError(""); setActiveField("identifier"); }}
                   className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-lg transition-all ${
                     inputMode === "manual" ? "bg-white text-emerald-700 shadow-sm" : "text-neutral-500 hover:text-neutral-700"
                   }`}
@@ -380,6 +437,14 @@ export default function Login() {
                   <Keyboard className="w-4 h-4" /> Manual Input
                 </button>
               </div>
+
+              <button
+                type="button"
+                onClick={() => openKeyboardForField(activeField)}
+                className="w-full flex items-center justify-center gap-2 py-3 px-4 border border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-xl font-semibold transition-colors"
+              >
+                <Keyboard className="w-4 h-4" /> On-Screen Keyboard
+              </button>
 
               {inputMode === "scan" ? (
                 <div className="space-y-4">
@@ -391,6 +456,9 @@ export default function Login() {
                     type="text"
                     value={identifier}
                     onChange={(e) => setIdentifier(e.target.value)}
+                    onFocus={() => openKeyboardForField("identifier")}
+                    onClick={() => openKeyboardForField("identifier")}
+                    inputMode="none"
                     placeholder="Or type Student ID and press Enter"
                     className="w-full p-4 border-2 border-neutral-200 rounded-2xl bg-neutral-50 focus:border-emerald-500 focus:ring-0 outline-none transition-colors text-lg"
                     required
@@ -402,6 +470,9 @@ export default function Login() {
                     type="text"
                     value={identifier}
                     onChange={(e) => setIdentifier(e.target.value)}
+                    onFocus={() => openKeyboardForField("identifier")}
+                    onClick={() => openKeyboardForField("identifier")}
+                    inputMode="none"
                     placeholder="Student ID (e.g. 2021-0001)"
                     className="w-full p-3 border-2 border-neutral-200 rounded-xl bg-neutral-50 focus:border-emerald-500 focus:ring-0 outline-none transition-colors"
                     required
@@ -410,6 +481,9 @@ export default function Login() {
                     type="text"
                     value={studentName}
                     onChange={(e) => setStudentName(e.target.value)}
+                    onFocus={() => openKeyboardForField("studentName")}
+                    onClick={() => openKeyboardForField("studentName")}
+                    inputMode="none"
                     placeholder="Full Name"
                     className="w-full p-3 border-2 border-neutral-200 rounded-xl bg-neutral-50 focus:border-emerald-500 focus:ring-0 outline-none transition-colors"
                     required
@@ -418,6 +492,9 @@ export default function Login() {
                     type="email"
                     value={studentEmail}
                     onChange={(e) => setStudentEmail(e.target.value)}
+                    onFocus={() => openKeyboardForField("studentEmail")}
+                    onClick={() => openKeyboardForField("studentEmail")}
+                    inputMode="none"
                     placeholder="Email Address"
                     className="w-full p-3 border-2 border-neutral-200 rounded-xl bg-neutral-50 focus:border-emerald-500 focus:ring-0 outline-none transition-colors"
                     required
@@ -456,6 +533,85 @@ export default function Login() {
         </form>
       </div>
       </div>
+
+      {keyboardOpen && (
+        <div className="fixed inset-0 z-50 bg-black/35 flex items-end justify-center p-2 sm:p-4">
+          <div className="w-full max-w-4xl bg-white rounded-2xl border border-neutral-200 shadow-2xl p-3 sm:p-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm sm:text-base font-semibold text-neutral-700">
+                On-Screen Keyboard for{" "}
+                {activeField === "identifier"
+                  ? "Student ID"
+                  : activeField === "studentName"
+                    ? "Full Name"
+                    : "Email Address"}
+              </p>
+              <button
+                type="button"
+                onClick={() => setKeyboardOpen(false)}
+                className="px-3 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-lg text-sm font-medium"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {KEYBOARD_ROWS.map((row) => (
+                <div key={row.join("")} className="grid gap-2" style={{ gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))` }}>
+                  {row.map((key) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => handleKeyboardKey(key)}
+                      className="h-11 sm:h-12 rounded-xl bg-neutral-100 hover:bg-neutral-200 active:scale-[0.98] transition-all text-base sm:text-lg font-bold text-neutral-800"
+                    >
+                      {capsLock ? key.toUpperCase() : key}
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-3 grid grid-cols-2 sm:grid-cols-5 gap-2">
+              <button
+                type="button"
+                onClick={() => setCapsLock((prev) => !prev)}
+                className={`h-11 rounded-xl font-semibold ${capsLock ? "bg-emerald-100 text-emerald-800" : "bg-neutral-100 text-neutral-700"}`}
+              >
+                {capsLock ? "Caps On" : "Caps Off"}
+              </button>
+              <button
+                type="button"
+                onClick={handleKeyboardSpace}
+                className="h-11 rounded-xl bg-blue-100 text-blue-800 font-semibold"
+              >
+                Space
+              </button>
+              <button
+                type="button"
+                onClick={handleKeyboardBackspace}
+                className="h-11 rounded-xl bg-amber-100 text-amber-800 font-semibold"
+              >
+                Backspace
+              </button>
+              <button
+                type="button"
+                onClick={handleKeyboardClear}
+                className="h-11 rounded-xl bg-red-100 text-red-800 font-semibold"
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                onClick={() => setKeyboardOpen(false)}
+                className="h-11 rounded-xl bg-neutral-800 text-white font-semibold"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
