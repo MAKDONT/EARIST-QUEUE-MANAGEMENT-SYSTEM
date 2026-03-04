@@ -3,7 +3,7 @@ import { createServer as createViteServer } from "vite";
 import { WebSocketServer, WebSocket } from "ws";
 import http from "http";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import nodemailer from "nodemailer";
+import sgMail from "@sendgrid/mail";
 import { google } from "googleapis";
 import multer from "multer";
 import fs from "fs";
@@ -45,101 +45,40 @@ function saveAdminTokens(tokens: any) {
 
 let supabaseClient: SupabaseClient | null = null;
 
-// Setup Nodemailer Transporter
-let transporter: nodemailer.Transporter | null = null;
-
-async function setupTransporter() {
-  // Try Google App Password first (more reliable in restricted environments)
-  if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
+// Setup SendGrid
+async function setupSendGrid() {
+  if (process.env.SENDGRID_API_KEY) {
     try {
-      const tempTransporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: process.env.GMAIL_USER,
-          pass: process.env.GMAIL_APP_PASSWORD,
-        },
-      });
-
-      // Don't verify on startup to avoid blocking if network is restricted
-      transporter = tempTransporter;
-      console.log("Gmail App Password Transporter Created Successfully");
-      return;
+      sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+      console.log("SendGrid Email Service Initialized Successfully");
     } catch (error: any) {
-      console.warn("Failed to create Gmail App Password transporter:", error.message);
+      console.error("Failed to initialize SendGrid:", error.message);
     }
-  }
-
-  // Try Google OAuth2 (may not work in restricted network environments)
-  if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_REFRESH_TOKEN && process.env.GMAIL_USER) {
-    try {
-      const oauth2Client = new google.auth.OAuth2(
-        process.env.GOOGLE_CLIENT_ID,
-        process.env.GOOGLE_CLIENT_SECRET,
-        process.env.GOOGLE_REDIRECT_URL || 'https://kiosk-sp.up.railway.app/auth/callback'
-      );
-
-      oauth2Client.setCredentials({
-        refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
-      });
-
-      // Don't verify on startup - will refresh on first use
-      const tempTransporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          type: 'OAuth2',
-          user: process.env.GMAIL_USER,
-          clientId: process.env.GOOGLE_CLIENT_ID,
-          clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-          refreshToken: process.env.GOOGLE_REFRESH_TOKEN,
-        },
-      });
-
-      transporter = tempTransporter;
-      console.log("Gmail OAuth2 Transporter Created Successfully (verification deferred)");
-      return;
-    } catch (error: any) {
-      console.warn("Failed to setup Gmail OAuth2:", error.message);
-    }
-  }
-
-  // Fallback to Ethereal (for development/testing)
-  try {
-    const account = await nodemailer.createTestAccount();
-    transporter = nodemailer.createTransport({
-      host: account.smtp.host,
-      port: account.smtp.port,
-      secure: account.smtp.secure,
-      auth: {
-        user: account.user,
-        pass: account.pass,
-      },
-    });
-    console.log("Ethereal Email Test Account Created (for testing)");
-  } catch (error) {
-    console.warn("Failed to create Ethereal test account:", error);
+  } else {
+    console.warn("SENDGRID_API_KEY not set. Email notifications will be disabled.");
   }
 }
-setupTransporter();
+setupSendGrid();
 
 async function sendEmailNotification(to: string, subject: string, html: string) {
-  if (!transporter) {
-    console.log("Email transporter not ready yet.");
+  if (!process.env.SENDGRID_API_KEY) {
+    console.log("SendGrid not configured. Email skipped.");
     return;
   }
+  
   try {
-    const fromEmail = process.env.GMAIL_USER || '"Consultation System" <noreply@example.com>';
-    const info = await transporter.sendMail({
-      from: fromEmail,
+    const fromEmail = process.env.SENDGRID_FROM_EMAIL || "noreply@consultation-system.com";
+    const msg = {
       to,
+      from: fromEmail,
       subject,
       html,
-    });
+    };
+    
+    await sgMail.send(msg);
     console.log(`[Email] Sent to ${to}`);
-    if (!process.env.GMAIL_USER) {
-      console.log(`[Email] Preview URL: ${nodemailer.getTestMessageUrl(info)}`);
-    }
-  } catch (error) {
-    console.error("Failed to send email:", error);
+  } catch (error: any) {
+    console.error("Failed to send email:", error.message);
   }
 }
 
