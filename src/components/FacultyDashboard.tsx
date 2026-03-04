@@ -31,7 +31,7 @@ export default function FacultyDashboard() {
 
   useEffect(() => {
     if (localStorage.getItem("user_role") !== "staff") {
-      navigate("/");
+      navigate("/staff/login");
       return;
     }
     fetchFaculty();
@@ -337,7 +337,7 @@ export default function FacultyDashboard() {
             onClick={() => {
               localStorage.removeItem("user_role");
               localStorage.removeItem("user_id");
-              navigate("/");
+              navigate("/staff/login");
             }}
             className="sm:hidden p-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-xl transition-colors"
           >
@@ -358,7 +358,7 @@ export default function FacultyDashboard() {
             onClick={() => {
               localStorage.removeItem("user_role");
               localStorage.removeItem("user_id");
-              navigate("/");
+              navigate("/staff/login");
             }}
             className="hidden sm:flex items-center gap-2 px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-medium rounded-xl transition-colors"
           >

@@ -852,6 +852,71 @@ async function startServer() {
     }
   });
 
+  // Admin: Live queue monitoring (waiting, next, ongoing)
+  app.get("/api/admin/queue-monitor", async (req, res) => {
+    try {
+      const { data, error } = await getSupabase()
+        .from("queue")
+        .select(`
+          id, status, created_at, faculty_id, meet_link,
+          students (full_name, student_number),
+          faculty (name)
+        `)
+        .in("status", ["waiting", "next", "serving", "ongoing"])
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
+
+      const formatted = (data || []).map((row: any) => {
+        const parts = row.meet_link ? row.meet_link.split("|") : [];
+        const time_period =
+          parts.length > 1
+            ? parts[0]
+            : parts.length === 1 && !parts[0].startsWith("http")
+              ? parts[0]
+              : null;
+        const actual_link =
+          parts.length > 1
+            ? parts[1]
+            : parts.length === 1 && parts[0].startsWith("http")
+              ? parts[0]
+              : null;
+
+        let mappedStatus = row.status;
+        if (row.status === "ongoing") mappedStatus = "serving";
+
+        return {
+          id: row.id,
+          status: mappedStatus,
+          created_at: row.created_at,
+          faculty_id: row.faculty_id,
+          faculty_name: row.faculty?.name || "Unknown Faculty",
+          student_name: row.students?.full_name || "Unknown Student",
+          student_number: row.students?.student_number || "",
+          time_period,
+          meet_link: actual_link,
+        };
+      });
+
+      // Prioritize current activity first: serving -> next -> waiting
+      const rank = (status: string) => {
+        if (status === "serving") return 0;
+        if (status === "next") return 1;
+        return 2;
+      };
+
+      formatted.sort((a: any, b: any) => {
+        const rankDiff = rank(a.status) - rank(b.status);
+        if (rankDiff !== 0) return rankDiff;
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      });
+
+      res.json(formatted);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Get Queue for Faculty
   app.get("/api/faculty/:faculty_id/queue", async (req, res) => {
     try {
@@ -859,7 +924,7 @@ async function startServer() {
         .from("queue")
         .select(`
           id, student_id, status, created_at, meet_link,
-          students (full_name)
+          students (full_name, student_number)
         `)
         .eq("faculty_id", req.params.faculty_id)
         .in("status", ["waiting", "next", "serving", "ongoing"])
@@ -883,6 +948,7 @@ async function startServer() {
           ...c,
           status: mappedStatus,
           student_name: c.students?.full_name,
+          student_number: c.students?.student_number || "",
           meet_link: actual_link,
           time_period: time_period
         };

@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Users, Shield, GraduationCap, LogIn, ScanLine, Keyboard, Clock } from "lucide-react";
-
-type Role = "student" | "staff" | "admin";
+import { Users, LogIn, ScanLine, Keyboard, Clock } from "lucide-react";
 
 interface Faculty {
   id: string;
@@ -18,8 +16,18 @@ interface Department {
   code: string;
 }
 
+interface LiveQueueItem {
+  id: number;
+  status: "waiting" | "next" | "serving";
+  created_at: string;
+  faculty_id: string;
+  faculty_name: string;
+  student_name: string;
+  student_number: string;
+  time_period?: string | null;
+}
+
 export default function Login() {
-  const [role, setRole] = useState<Role>("student");
   const [inputMode, setInputMode] = useState<"scan" | "manual">("scan");
   
   // Student Fields
@@ -28,19 +36,19 @@ export default function Login() {
   const [studentEmail, setStudentEmail] = useState("");
   const [course, setCourse] = useState("");
   
-  // Staff/Admin Fields
-  const [password, setPassword] = useState("");
-  
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
   const [faculty, setFaculty] = useState<Faculty[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [liveQueue, setLiveQueue] = useState<LiveQueueItem[]>([]);
+  const [liveQueueLoading, setLiveQueueLoading] = useState(false);
 
   useEffect(() => {
     fetchFaculty();
     fetchDepartments();
+    fetchLiveQueue();
     
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const ws = new WebSocket(`${protocol}//${window.location.host}`);
@@ -49,10 +57,18 @@ export default function Login() {
       const data = JSON.parse(event.data);
       if (data.type === "faculty_updated" || data.type === "queue_updated") {
         fetchFaculty();
+        fetchLiveQueue(1, true);
       }
     };
 
-    return () => ws.close();
+    const interval = setInterval(() => {
+      fetchLiveQueue(1, true);
+    }, 15000);
+
+    return () => {
+      clearInterval(interval);
+      ws.close();
+    };
   }, []);
 
   const fetchFaculty = async (retries = 3) => {
@@ -87,6 +103,87 @@ export default function Login() {
     }
   };
 
+  const fetchLiveQueue = async (retries = 2, silent = false) => {
+    if (!silent) setLiveQueueLoading(true);
+    try {
+      const res = await fetch("/api/admin/queue-monitor");
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        throw new Error("Queue monitor endpoint returned non-JSON response");
+      }
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setLiveQueue(sortLiveQueue(data as LiveQueueItem[]));
+      } else {
+        throw new Error("Queue monitor payload is not an array");
+      }
+    } catch (err) {
+      console.error("Failed to fetch live queue", err);
+      try {
+        const legacy = await fetchLegacyLiveQueue();
+        setLiveQueue(legacy);
+      } catch (legacyErr) {
+        console.error("Fallback live queue fetch failed", legacyErr);
+        if (retries > 0) {
+          setTimeout(() => fetchLiveQueue(retries - 1, silent), 2000);
+        }
+      }
+    } finally {
+      if (!silent) setLiveQueueLoading(false);
+    }
+  };
+
+  const sortLiveQueue = (items: LiveQueueItem[]) => {
+    const rank = (status: LiveQueueItem["status"]) => {
+      if (status === "serving") return 0;
+      if (status === "next") return 1;
+      return 2;
+    };
+
+    return [...items].sort((a, b) => {
+      const statusDiff = rank(a.status) - rank(b.status);
+      if (statusDiff !== 0) return statusDiff;
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    });
+  };
+
+  const fetchLegacyLiveQueue = async (): Promise<LiveQueueItem[]> => {
+    const facultyRes = await fetch("/api/faculty");
+    if (!facultyRes.ok) throw new Error(`Faculty endpoint failed: ${facultyRes.status}`);
+    const facultyData = await facultyRes.json();
+    if (!Array.isArray(facultyData)) throw new Error("Faculty payload is not an array");
+
+    const queueLists = await Promise.all(
+      facultyData.map(async (f: any) => {
+        try {
+          const queueRes = await fetch(`/api/faculty/${f.id}/queue`);
+          if (!queueRes.ok) return [];
+          const queueData = await queueRes.json();
+          if (!Array.isArray(queueData)) return [];
+
+          return queueData
+            .filter((item: any) => ["waiting", "next", "serving"].includes(item.status))
+            .map((item: any) => ({
+              id: Number(item.id),
+              status: item.status as LiveQueueItem["status"],
+              created_at: item.created_at,
+              faculty_id: f.id,
+              faculty_name: f.name || "Unknown Faculty",
+              student_name: item.student_name || "Unknown Student",
+              student_number: item.student_number || "",
+              time_period: item.time_period || null,
+              meet_link: item.meet_link || null,
+            }));
+        } catch {
+          return [];
+        }
+      })
+    );
+
+    return sortLiveQueue(queueLists.flat());
+  };
+
   const getAvailabilityRange = (f: Faculty) => {
     try {
       const parsed = JSON.parse(f.full_name || "[]");
@@ -119,63 +216,38 @@ export default function Login() {
     setError("");
 
     try {
-      if (role === "admin") {
-        const adminRes = await fetch("/api/admin/password");
-        const adminData = await adminRes.json();
-        const adminPass = adminData.password || "EARIST";
-        
-        if (password === adminPass) {
-          localStorage.setItem("user_role", "admin");
-          navigate("/admin/dashboard");
-        } else {
-          throw new Error("Invalid admin password");
+      if (inputMode === "scan") {
+        // Check if student exists
+        const res = await fetch(`/api/students/${identifier}`);
+        if (!res.ok) {
+          throw new Error("Student not found in database. Please use Manual Input.");
         }
-      } else if (role === "staff") {
-        const res = await fetch("/api/faculty/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: identifier, password }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Login failed");
-        
-        localStorage.setItem("user_role", "staff");
-        localStorage.setItem("user_id", data.id);
-        navigate(`/faculty/${data.id}`);
-      } else if (role === "student") {
-        if (inputMode === "scan") {
-          // Check if student exists
-          const res = await fetch(`/api/students/${identifier}`);
-          if (!res.ok) {
-            throw new Error("Student not found in database. Please use Manual Input.");
-          }
-          const studentData = await res.json();
-          localStorage.setItem("student_id", studentData.id);
-          localStorage.setItem("student_name", studentData.name);
-          localStorage.setItem("student_email", studentData.email || "");
-          localStorage.setItem("student_course", studentData.course || "");
-        } else {
-          // Manual input
-          if (!identifier || !studentName || !studentEmail || !course) {
-            throw new Error("Please fill in all fields.");
-          }
-          localStorage.setItem("student_id", identifier);
-          localStorage.setItem("student_name", studentName);
-          localStorage.setItem("student_email", studentEmail);
-          localStorage.setItem("student_course", course);
+        const studentData = await res.json();
+        localStorage.setItem("student_id", studentData.id);
+        localStorage.setItem("student_name", studentData.name);
+        localStorage.setItem("student_email", studentData.email || "");
+        localStorage.setItem("student_course", studentData.course || "");
+      } else {
+        // Manual input
+        if (!identifier || !studentName || !studentEmail || !course) {
+          throw new Error("Please fill in all fields.");
         }
-        
-        localStorage.setItem("user_role", "student");
-        
-        // Check for active queue
-        const queueRes = await fetch(`/api/student/${identifier}/active-queue`);
-        const queueData = await queueRes.json();
-        
-        if (queueRes.ok && queueData.id) {
-          navigate(`/student/${queueData.id}`);
-        } else {
-          navigate(`/kiosk`);
-        }
+        localStorage.setItem("student_id", identifier);
+        localStorage.setItem("student_name", studentName);
+        localStorage.setItem("student_email", studentEmail);
+        localStorage.setItem("student_course", course);
+      }
+
+      localStorage.setItem("user_role", "student");
+
+      // Check for active queue
+      const queueRes = await fetch(`/api/student/${identifier}/active-queue`);
+      const queueData = await queueRes.json();
+
+      if (queueRes.ok && queueData.id) {
+        navigate(`/student/${queueData.id}`);
+      } else {
+        navigate(`/kiosk`);
       }
     } catch (err: any) {
       setError(err.message);
@@ -184,10 +256,16 @@ export default function Login() {
     }
   };
 
+  const availableFaculty = faculty.filter(f => f.status === "available");
+  const servingStudents = liveQueue.filter((item) => item.status === "serving");
+  const nextStudents = liveQueue.filter((item) => item.status === "next");
+  const waitingStudents = liveQueue.filter((item) => item.status === "waiting");
+  const activeStudents = [...servingStudents, ...nextStudents, ...waitingStudents];
+
   return (
     <div className="min-h-screen bg-neutral-100 flex flex-col lg:flex-row">
       {/* Live Monitor Sidebar */}
-      <div className="w-full lg:w-96 bg-white border-r border-neutral-200 p-6 flex flex-col overflow-hidden shadow-lg z-10">
+      <div className="w-full lg:w-[560px] bg-white border-r border-neutral-200 p-6 flex flex-col overflow-hidden shadow-lg z-10">
         <h2 className="text-2xl font-bold text-neutral-900 mb-6 flex items-center gap-2">
           <span className="relative flex h-3 w-3">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -195,24 +273,78 @@ export default function Login() {
           </span>
           Live Monitor
         </h2>
-        <div className="flex-1 overflow-y-auto space-y-4 pr-2">
-          {faculty.filter(f => f.status === 'available').length === 0 ? (
-            <div className="text-center py-8 text-neutral-500">
-              <Users className="w-12 h-12 text-neutral-300 mx-auto mb-3" />
-              <p>No faculty members are currently available.</p>
+        <div className="flex-1 overflow-y-auto pr-2">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-bold text-neutral-600 uppercase tracking-wider">Available Faculty</h3>
+              <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">
+                {availableFaculty.length}
+              </span>
             </div>
-          ) : (
-            faculty.filter(f => f.status === 'available').map(f => (
-              <div key={f.id} className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl">
-                <h3 className="font-bold text-emerald-900">{f.name}</h3>
-                <p className="text-sm text-emerald-700">{f.department}</p>
-                <div className="mt-2 text-sm font-medium text-emerald-800 flex items-center gap-1">
-                  <Clock className="w-4 h-4" />
-                  {getAvailabilityRange(f)}
-                </div>
+            {availableFaculty.length === 0 ? (
+              <div className="text-center py-6 text-neutral-500 bg-neutral-50 rounded-2xl border border-neutral-200">
+                <Users className="w-10 h-10 text-neutral-300 mx-auto mb-2" />
+                <p className="text-sm">No faculty members are currently available.</p>
               </div>
-            ))
-          )}
+            ) : (
+              <div className="space-y-3">
+                {availableFaculty.map(f => (
+                  <div key={f.id} className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl">
+                    <h3 className="font-bold text-emerald-900">{f.name}</h3>
+                    <p className="text-sm text-emerald-700">{f.department}</p>
+                    <div className="mt-2 text-sm font-medium text-emerald-800 flex items-center gap-1">
+                      <Clock className="w-4 h-4" />
+                      {getAvailabilityRange(f)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            </div>
+
+            <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-bold text-neutral-600 uppercase tracking-wider">Students Queue</h3>
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold">Now {servingStudents.length}</span>
+                <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold">Next {nextStudents.length}</span>
+                <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-700 font-semibold">Wait {waitingStudents.length}</span>
+              </div>
+            </div>
+            {liveQueueLoading && activeStudents.length === 0 ? (
+              <div className="text-center py-6 text-neutral-500 bg-neutral-50 rounded-2xl border border-neutral-200">
+                <p className="text-sm">Loading students queue...</p>
+              </div>
+            ) : activeStudents.length === 0 ? (
+              <div className="text-center py-6 text-neutral-500 bg-neutral-50 rounded-2xl border border-neutral-200">
+                <p className="text-sm">No active students in queue.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {activeStudents.map((item) => (
+                  <div key={item.id} className="p-4 bg-indigo-50 border border-indigo-100 rounded-2xl">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="font-bold text-indigo-900 truncate">{item.student_name}</h3>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                        item.status === "serving"
+                          ? "bg-emerald-100 text-emerald-700"
+                          : item.status === "next"
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-blue-100 text-blue-700"
+                      }`}>
+                        {item.status}
+                      </span>
+                    </div>
+                    <p className="text-xs text-indigo-700 mt-1 truncate">Student Number: {item.student_number || "N/A"}</p>
+                    <p className="text-xs text-indigo-700 mt-1 truncate">Faculty: {item.faculty_name}</p>
+                    <p className="text-[11px] text-indigo-500 mt-1">Slot: {item.time_period || "Walk-in / No slot"}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -223,41 +355,10 @@ export default function Login() {
             <h1 className="text-3xl font-bold text-neutral-900 tracking-tight">
               Welcome Back
             </h1>
-            <p className="text-neutral-500">Select your role to continue</p>
+            <p className="text-neutral-500">Student booking portal</p>
           </div>
 
-        <div className="flex p-1 bg-neutral-100 rounded-xl">
-          <button
-            type="button"
-            onClick={() => { setRole("student"); setError(""); }}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg transition-all ${
-              role === "student" ? "bg-white text-emerald-700 shadow-sm" : "text-neutral-500 hover:text-neutral-700"
-            }`}
-          >
-            <GraduationCap className="w-4 h-4" /> Student
-          </button>
-          <button
-            type="button"
-            onClick={() => { setRole("staff"); setError(""); }}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg transition-all ${
-              role === "staff" ? "bg-white text-indigo-700 shadow-sm" : "text-neutral-500 hover:text-neutral-700"
-            }`}
-          >
-            <Users className="w-4 h-4" /> Staff
-          </button>
-          <button
-            type="button"
-            onClick={() => { setRole("admin"); setError(""); }}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg transition-all ${
-              role === "admin" ? "bg-white text-red-700 shadow-sm" : "text-neutral-500 hover:text-neutral-700"
-            }`}
-          >
-            <Shield className="w-4 h-4" /> Admin
-          </button>
-        </div>
-
-        <form onSubmit={handleLogin} className="space-y-6">
-          {role === "student" && (
+          <form onSubmit={handleLogin} className="space-y-6">
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
               <div className="flex p-1 bg-neutral-100 rounded-xl">
                 <button
@@ -337,70 +438,18 @@ export default function Login() {
                 </div>
               )}
             </div>
-          )}
-
-          {role === "staff" && (
-            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-neutral-700 block">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  value={identifier}
-                  onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder="e.g. faculty@earist.edu.ph"
-                  className="w-full p-4 border-2 border-neutral-200 rounded-2xl bg-neutral-50 focus:border-indigo-500 focus:ring-0 outline-none transition-colors text-lg"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-neutral-700 block">
-                  Password
-                </label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter password"
-                  className="w-full p-4 border-2 border-neutral-200 rounded-2xl bg-neutral-50 focus:border-indigo-500 focus:ring-0 outline-none transition-colors text-lg"
-                  required
-                />
-              </div>
-            </div>
-          )}
-
-          {role === "admin" && (
-            <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2">
-              <label className="text-sm font-medium text-neutral-700 block">
-                Admin Password
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter password"
-                className="w-full p-4 border-2 border-neutral-200 rounded-2xl bg-neutral-50 focus:border-red-500 focus:ring-0 outline-none transition-colors text-lg"
-                required
-              />
-            </div>
-          )}
 
           {error && <p className="text-red-500 text-sm">{error}</p>}
 
           <button
             type="submit"
-            disabled={loading || (role === "student" ? !identifier : role === "admin" ? !password : !identifier || !password)}
-            className={`w-full flex items-center justify-center gap-2 py-4 px-4 text-white text-lg font-bold rounded-2xl shadow-lg transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${
-              role === "student" ? "bg-emerald-600 hover:bg-emerald-700" :
-              role === "staff" ? "bg-indigo-600 hover:bg-indigo-700" :
-              "bg-red-600 hover:bg-red-700"
-            }`}
+            disabled={loading || !identifier}
+            className="w-full flex items-center justify-center gap-2 py-4 px-4 text-white text-lg font-bold rounded-2xl shadow-lg transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed bg-emerald-600 hover:bg-emerald-700"
           >
             {loading ? "Please wait..." : (
               <>
                 <LogIn className="w-5 h-5" />
-                {role === "student" ? "Continue" : "Login"}
+                Continue
               </>
             )}
           </button>

@@ -1,6 +1,18 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Shield, LogOut, Plus, Building, UserPlus, ArrowLeft, Trash2, KeyRound, AlertTriangle } from "lucide-react";
+import { Shield, LogOut, Plus, Building, UserPlus, ArrowLeft, Trash2, KeyRound, AlertTriangle, Users } from "lucide-react";
+
+interface LiveQueueItem {
+  id: number;
+  status: "waiting" | "next" | "serving";
+  created_at: string;
+  faculty_id: string;
+  faculty_name: string;
+  student_name: string;
+  student_number: string;
+  time_period?: string | null;
+  meet_link?: string | null;
+}
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -36,16 +48,19 @@ export default function AdminDashboard() {
 
   const [driveConnected, setDriveConnected] = useState(false);
   const [driveMode, setDriveMode] = useState<"service_account" | "oauth" | "none">("none");
+  const [liveQueue, setLiveQueue] = useState<LiveQueueItem[]>([]);
+  const [liveQueueLoading, setLiveQueueLoading] = useState(false);
 
   useEffect(() => {
     if (localStorage.getItem("user_role") !== "admin") {
-      navigate("/");
+      navigate("/admin/login");
       return;
     }
     fetchDepartments();
     fetchColleges();
     fetchFaculties();
     checkDriveStatus();
+    fetchLiveQueue();
   }, [navigate]);
 
   useEffect(() => {
@@ -53,10 +68,43 @@ export default function AdminDashboard() {
       if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
         setDriveConnected(true);
         setDriveMode("oauth");
+      } else if (event.data?.type === 'OAUTH_AUTH_ERROR') {
+        alert(`Google OAuth failed: ${event.data?.error}\n${event.data?.description || ''}`);
       }
     };
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  useEffect(() => {
+    if (localStorage.getItem("user_role") !== "admin") return;
+
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const ws = new WebSocket(`${protocol}//${window.location.host}`);
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "queue_updated") {
+          fetchLiveQueue(1, true);
+        }
+        if (data.type === "faculty_updated") {
+          fetchFaculties();
+          fetchLiveQueue(1, true);
+        }
+      } catch (err) {
+        console.error("Admin WS message parse error", err);
+      }
+    };
+
+    const interval = setInterval(() => {
+      fetchLiveQueue(1, true);
+    }, 15000);
+
+    return () => {
+      clearInterval(interval);
+      ws.close();
+    };
   }, []);
 
   const checkDriveStatus = async () => {
@@ -68,6 +116,87 @@ export default function AdminDashboard() {
     } catch (err) {
       console.error("Failed to check drive status", err);
     }
+  };
+
+  const fetchLiveQueue = async (retries = 2, silent = false) => {
+    if (!silent) setLiveQueueLoading(true);
+    try {
+      const res = await fetch("/api/admin/queue-monitor");
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        throw new Error("Queue monitor endpoint returned non-JSON response");
+      }
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setLiveQueue(sortLiveQueue(data as LiveQueueItem[]));
+      } else {
+        throw new Error("Queue monitor payload is not an array");
+      }
+    } catch (err) {
+      console.error("Failed to fetch live queue", err);
+      try {
+        const legacy = await fetchLegacyLiveQueue();
+        setLiveQueue(legacy);
+      } catch (legacyErr) {
+        console.error("Fallback live queue fetch failed", legacyErr);
+        if (retries > 0) {
+          setTimeout(() => fetchLiveQueue(retries - 1, silent), 2000);
+        }
+      }
+    } finally {
+      if (!silent) setLiveQueueLoading(false);
+    }
+  };
+
+  const sortLiveQueue = (items: LiveQueueItem[]) => {
+    const rank = (status: LiveQueueItem["status"]) => {
+      if (status === "serving") return 0;
+      if (status === "next") return 1;
+      return 2;
+    };
+
+    return [...items].sort((a, b) => {
+      const statusDiff = rank(a.status) - rank(b.status);
+      if (statusDiff !== 0) return statusDiff;
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    });
+  };
+
+  const fetchLegacyLiveQueue = async (): Promise<LiveQueueItem[]> => {
+    const facultyRes = await fetch("/api/faculty");
+    if (!facultyRes.ok) throw new Error(`Faculty endpoint failed: ${facultyRes.status}`);
+    const facultyData = await facultyRes.json();
+    if (!Array.isArray(facultyData)) throw new Error("Faculty payload is not an array");
+
+    const queueLists = await Promise.all(
+      facultyData.map(async (f: any) => {
+        try {
+          const queueRes = await fetch(`/api/faculty/${f.id}/queue`);
+          if (!queueRes.ok) return [];
+          const queueData = await queueRes.json();
+          if (!Array.isArray(queueData)) return [];
+
+          return queueData
+            .filter((item: any) => ["waiting", "next", "serving"].includes(item.status))
+            .map((item: any) => ({
+              id: Number(item.id),
+              status: item.status as LiveQueueItem["status"],
+              created_at: item.created_at,
+              faculty_id: f.id,
+              faculty_name: f.name || "Unknown Faculty",
+              student_name: item.student_name || "Unknown Student",
+              student_number: item.student_number || "",
+              time_period: item.time_period || null,
+              meet_link: item.meet_link || null,
+            }));
+        } catch {
+          return [];
+        }
+      })
+    );
+
+    return sortLiveQueue(queueLists.flat());
   };
 
   const handleConnectDrive = async () => {
@@ -302,7 +431,7 @@ export default function AdminDashboard() {
 
   const handleLogout = () => {
     localStorage.removeItem("user_role");
-    navigate("/");
+    navigate("/admin/login");
   };
 
   const handleDeleteCollege = async () => {
@@ -341,11 +470,15 @@ export default function AdminDashboard() {
     }
   };
 
+  const servingStudents = liveQueue.filter((item) => item.status === "serving");
+  const nextStudents = liveQueue.filter((item) => item.status === "next");
+  const waitingStudents = liveQueue.filter((item) => item.status === "waiting");
+
   return (
     <div className="min-h-screen bg-neutral-100 flex flex-col">
       <header className="bg-white shadow-sm p-6 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate("/")} className="p-2 hover:bg-neutral-100 rounded-full transition-colors">
+          <button onClick={() => navigate("/admin/login")} className="p-2 hover:bg-neutral-100 rounded-full transition-colors">
             <ArrowLeft className="w-6 h-6 text-neutral-600" />
           </button>
           <Shield className="w-8 h-8 text-red-600" />
@@ -416,6 +549,91 @@ export default function AdminDashboard() {
           </button>
         </div>
       </header>
+
+      {/* Live Queue Monitoring */}
+      <section className="px-8 pt-8 max-w-7xl mx-auto w-full">
+        <div className="bg-white rounded-3xl shadow-lg p-8">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-indigo-100 rounded-2xl">
+                <Users className="w-6 h-6 text-indigo-600" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-neutral-900">Live Student Monitoring</h2>
+                <p className="text-sm text-neutral-500">Real-time view of students in queue and ongoing consultations.</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-sm font-medium border border-emerald-100">
+                Ongoing: {servingStudents.length}
+              </span>
+              <span className="px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 text-sm font-medium border border-amber-100">
+                Next: {nextStudents.length}
+              </span>
+              <span className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 text-sm font-medium border border-blue-100">
+                Waiting: {waitingStudents.length}
+              </span>
+            </div>
+          </div>
+
+          {liveQueueLoading && liveQueue.length === 0 ? (
+            <div className="p-6 rounded-2xl bg-neutral-50 text-neutral-500 text-sm border border-neutral-200">
+              Loading live queue...
+            </div>
+          ) : liveQueue.length === 0 ? (
+            <div className="p-6 rounded-2xl bg-neutral-50 text-neutral-500 text-sm border border-neutral-200">
+              No active students in queue right now.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
+                <h3 className="text-sm font-bold text-neutral-700 uppercase tracking-wider mb-3">Ongoing and Next</h3>
+                <div className="space-y-3 max-h-72 overflow-y-auto">
+                  {[...servingStudents, ...nextStudents].length === 0 ? (
+                    <div className="text-sm text-neutral-400">No students currently serving or next.</div>
+                  ) : (
+                    [...servingStudents, ...nextStudents].map((item) => (
+                      <div key={item.id} className="p-3 rounded-xl bg-white border border-neutral-200">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-semibold text-neutral-900">{item.student_name}</p>
+                          <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider ${
+                            item.status === "serving"
+                              ? "bg-emerald-100 text-emerald-700"
+                              : "bg-amber-100 text-amber-700"
+                          }`}>
+                            {item.status}
+                          </span>
+                        </div>
+                        <p className="text-sm text-neutral-600">Student Number: {item.student_number || "N/A"}</p>
+                        <p className="text-xs text-neutral-500 mt-1">Faculty: {item.faculty_name}</p>
+                        <p className="text-xs text-neutral-500">Slot: {item.time_period || "Walk-in / No slot"}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
+                <h3 className="text-sm font-bold text-neutral-700 uppercase tracking-wider mb-3">Waiting Queue</h3>
+                <div className="space-y-3 max-h-72 overflow-y-auto">
+                  {waitingStudents.length === 0 ? (
+                    <div className="text-sm text-neutral-400">No students waiting.</div>
+                  ) : (
+                    waitingStudents.map((item) => (
+                      <div key={item.id} className="p-3 rounded-xl bg-white border border-neutral-200">
+                        <p className="font-semibold text-neutral-900">{item.student_name}</p>
+                        <p className="text-sm text-neutral-600">Student Number: {item.student_number || "N/A"}</p>
+                        <p className="text-xs text-neutral-500 mt-1">Faculty: {item.faculty_name}</p>
+                        <p className="text-xs text-neutral-500">Slot: {item.time_period || "Walk-in / No slot"}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
 
       <main className="flex-1 p-8 max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Add College */}
