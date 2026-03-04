@@ -95,10 +95,8 @@ export default function FacultyDashboard() {
   };
 
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
   const [driveConnected, setDriveConnected] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [recordedAudio, setRecordedAudio] = useState<{ blob: Blob } | null>(null);
 
   useEffect(() => {
     const checkDriveStatus = async () => {
@@ -113,38 +111,35 @@ export default function FacultyDashboard() {
     checkDriveStatus();
   }, []);
 
-  const handleSaveToDrive = async () => {
-    if (!recordedAudio) return;
-    
-    if (driveConnected) {
-      setUploading(true);
-      const formData = new FormData();
-      formData.append('file', recordedAudio.blob, `consultation-audio-${new Date().toISOString().replace(/:/g, '-')}.webm`);
-      formData.append('faculty_id', selectedFaculty!.toString());
-      
-      try {
-        const res = await fetch('/api/drive/upload', {
-          method: 'POST',
-          body: formData
-        });
-        const data = await res.json();
-        if (data.success) {
-          alert(`Audio saved to Admin Google Drive: ${data.link}`);
-          setRecordedAudio(null);
-        } else {
-          throw new Error(data.error);
-        }
-      } catch (err) {
-        console.error("Failed to upload to drive", err);
-        alert("Failed to save to Google Drive. Downloading locally instead.");
-        downloadLocally(recordedAudio.blob);
-        setRecordedAudio(null);
-      } finally {
-        setUploading(false);
+  const uploadToDrive = async (blob: Blob) => {
+    if (!driveConnected) {
+      alert("Google Drive is not connected. Recording was not uploaded.");
+      return;
+    }
+
+    setUploading(true);
+    const formData = new FormData();
+    formData.append('file', blob, `consultation-audio-${new Date().toISOString().replace(/:/g, '-')}.webm`);
+    formData.append('faculty_id', selectedFaculty!.toString());
+
+    try {
+      const res = await fetch('/api/drive/upload', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.hint ? `${data.error}\n${data.hint}` : data.error || "Upload failed");
       }
-    } else {
-      downloadLocally(recordedAudio.blob);
-      setRecordedAudio(null);
+      if (data.warning) {
+        alert(data.warning);
+      }
+    } catch (err) {
+      console.error("Failed to upload to drive", err);
+      const message = err instanceof Error ? err.message : "Failed to save to Google Drive.";
+      alert(message);
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -161,18 +156,16 @@ export default function FacultyDashboard() {
       recorder.ondataavailable = (e) => chunks.push(e.data);
       recorder.onstop = async () => {
         const blob = new Blob(chunks, { type: 'audio/webm' });
-        setRecordedAudio({ blob });
-        
-        setIsRecording(false);
         setMediaRecorder(null);
         
         // Stop all tracks
         stream.getTracks().forEach(track => track.stop());
+
+        await uploadToDrive(blob);
       };
       
       recorder.start();
       setMediaRecorder(recorder);
-      setIsRecording(true);
       
       // Handle user stopping microphone via browser UI
       stream.getAudioTracks()[0].onended = () => {
@@ -184,15 +177,6 @@ export default function FacultyDashboard() {
       console.error("Error starting audio recording:", err);
       alert("Could not start audio recording. Please ensure you have granted microphone permissions.");
     }
-  };
-
-  const downloadLocally = (blob: Blob) => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `consultation-audio-${new Date().toISOString().replace(/:/g, '-')}.webm`;
-    a.click();
-    URL.revokeObjectURL(url);
   };
 
   const stopAudioRecording = () => {
@@ -705,56 +689,6 @@ export default function FacultyDashboard() {
                   Save Changes
                 </button>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-      {recordedAudio && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl text-center">
-            <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CheckCircle className="w-8 h-8 text-emerald-600" />
-            </div>
-            <h2 className="text-2xl font-bold text-neutral-900 mb-2">Consultation Completed</h2>
-            <p className="text-neutral-600 mb-8">The consultation audio has been recorded successfully. Would you like to save it to Google Drive?</p>
-            
-            <div className="space-y-3">
-              <button
-                onClick={handleSaveToDrive}
-                disabled={uploading}
-                className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-2"
-              >
-                {uploading ? (
-                  <span className="animate-pulse">Uploading...</span>
-                ) : (
-                  <>
-                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M15.3 18.5H5.4L10.3 10L15.3 18.5Z" fill="currentColor"/>
-                      <path d="M8.7 18.5H18.6L13.7 10L8.7 18.5Z" fill="currentColor"/>
-                      <path d="M12 4.5L7.1 13H16.9L12 4.5Z" fill="currentColor"/>
-                      <path d="M12 4.5L2.2 21.5H12L21.8 4.5H12Z" fill="currentColor"/>
-                    </svg>
-                    Save to Google Drive
-                  </>
-                )}
-              </button>
-              <button
-                onClick={() => {
-                  downloadLocally(recordedAudio.blob);
-                  setRecordedAudio(null);
-                }}
-                disabled={uploading}
-                className="w-full py-3 px-4 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-medium rounded-xl transition-colors"
-              >
-                Download Locally
-              </button>
-              <button
-                onClick={() => setRecordedAudio(null)}
-                disabled={uploading}
-                className="w-full py-3 px-4 text-neutral-500 hover:text-neutral-700 font-medium transition-colors"
-              >
-                Discard Recording
-              </button>
             </div>
           </div>
         </div>

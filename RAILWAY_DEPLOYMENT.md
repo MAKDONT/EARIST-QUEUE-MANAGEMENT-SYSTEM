@@ -30,21 +30,28 @@ git push origin main
 In Railway Dashboard:
 1. Go to your project settings (gear icon)
 2. Click "Variables"
-3. Add all variables from `.env.local`:
-   - `GMAIL_USER`
-   - `GOOGLE_CLIENT_ID`
-   - `GOOGLE_CLIENT_SECRET`
-   - `GOOGLE_REFRESH_TOKEN`
-   - `GMAIL_APP_PASSWORD` (if needed as fallback)
+3. Add required app variables:
+   - `SENDGRID_API_KEY`
+   - `SENDGRID_FROM_EMAIL`
    - `SUPABASE_URL`
    - `SUPABASE_SERVICE_ROLE_KEY`
    - `NODE_ENV=production`
-   - `GOOGLE_REDIRECT_URL=https://your-railway-domain.up.railway.app/auth/callback`
 
-### 4. Update Callback URL
+4. Configure Google Drive using one mode:
+   - Recommended server-side mode (no OAuth popup/client redirect):
+     - `GOOGLE_SERVICE_ACCOUNT_JSON=<service account json or base64>`
+     - Optional: `GOOGLE_DRIVE_FOLDER_ID=<target folder id>`
+   - OAuth fallback mode:
+     - `GOOGLE_CLIENT_ID`
+     - `GOOGLE_CLIENT_SECRET`
+     - `GOOGLE_REDIRECT_URI=https://your-railway-domain.up.railway.app/api/auth/google/callback`
+     - Optional: `APP_BASE_URL=https://your-railway-domain.up.railway.app`
+
+### 4. OAuth Callback URL (only if using OAuth mode)
 After Railway assigns a domain:
-- Update `GOOGLE_REDIRECT_URL` with your Railway app URL
-- Make sure it matches the OAuth app settings in Google Cloud
+- Set `GOOGLE_REDIRECT_URI` to:
+  `https://your-railway-domain.up.railway.app/api/auth/google/callback`
+- Register that exact same URL in Google Cloud Console OAuth redirect URIs.
 
 ### 5. Deploy
 - Railway auto-deploys on push to main
@@ -63,13 +70,14 @@ The app now reads `PORT` from environment - Railway sets this automatically.
 
 ### OAuth Callback URL
 Must match exactly what's registered in Google Cloud Console.
+Use `/api/auth/google/callback` (not `/auth/callback`).
 
 ### Database Connection
 Ensure `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are correct.
 
 ### Email Not Sending
-1. Check if OAuth2 credentials are valid
-2. Verify Gmail account is not restricted
+1. Check if SendGrid API key is valid
+2. Verify sender email is verified in SendGrid
 3. Check Railway logs for error details
 
 ## File Structure for Deployment

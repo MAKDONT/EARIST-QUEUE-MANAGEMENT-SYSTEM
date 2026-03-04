@@ -35,6 +35,7 @@ export default function AdminDashboard() {
   const [resetPasswordModal, setResetPasswordModal] = useState<{ isOpen: boolean; id: string; name: string }>({ isOpen: false, id: "", name: "" });
 
   const [driveConnected, setDriveConnected] = useState(false);
+  const [driveMode, setDriveMode] = useState<"service_account" | "oauth" | "none">("none");
 
   useEffect(() => {
     if (localStorage.getItem("user_role") !== "admin") {
@@ -51,6 +52,7 @@ export default function AdminDashboard() {
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
         setDriveConnected(true);
+        setDriveMode("oauth");
       }
     };
     window.addEventListener('message', handleMessage);
@@ -62,6 +64,7 @@ export default function AdminDashboard() {
       const res = await fetch(`/api/drive/status`);
       const data = await res.json();
       setDriveConnected(data.connected);
+      setDriveMode(data.mode || "none");
     } catch (err) {
       console.error("Failed to check drive status", err);
     }
@@ -69,10 +72,19 @@ export default function AdminDashboard() {
 
   const handleConnectDrive = async () => {
     try {
-      const redirectUri = `${window.location.origin}/api/auth/google/callback`;
-      const response = await fetch(`/api/auth/google/url?redirect_uri=${encodeURIComponent(redirectUri)}`);
+      const response = await fetch(`/api/auth/google/url`);
       if (!response.ok) throw new Error('Failed to get auth URL');
-      const { url } = await response.json();
+      const data = await response.json();
+      const { url, mode, message } = data;
+
+      if (!url) {
+        if (mode === "service_account") {
+          setDriveConnected(true);
+          alert(message || "Server-side Google Drive service account is already active.");
+          return;
+        }
+        throw new Error(message || "No OAuth URL returned.");
+      }
       
       const authWindow = window.open(url, 'oauth_popup', 'width=600,height=700');
       if (!authWindow) {
@@ -85,12 +97,17 @@ export default function AdminDashboard() {
   };
 
   const handleDisconnectDrive = async () => {
+    if (driveMode === "service_account") {
+      alert("Drive is connected using server-side service account credentials. Remove the service account env vars to disable it.");
+      return;
+    }
     if (!confirm("Are you sure you want to disconnect Google Drive? New recordings will not be uploaded until you reconnect.")) return;
     
     try {
       const res = await fetch("/api/drive/disconnect", { method: "POST" });
       if (!res.ok) throw new Error("Failed to disconnect");
       setDriveConnected(false);
+      setDriveMode("none");
       alert("Google Drive disconnected successfully.");
     } catch (err) {
       console.error("Failed to disconnect drive", err);
@@ -347,15 +364,23 @@ export default function AdminDashboard() {
                     <path d="M12 4.5L7.1 13H16.9L12 4.5Z" fill="#EA4335"/>
                     <path d="M12 4.5L2.2 21.5H12L21.8 4.5H12Z" fill="#FFBA00"/>
                   </svg>
-                  <span className="text-sm font-medium">Drive Connected</span>
+                  <span className="text-sm font-medium">
+                    {driveMode === "service_account" ? "Drive Connected (Server)" : "Drive Connected"}
+                  </span>
                 </div>
-                <button
-                  onClick={handleDisconnectDrive}
-                  className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-sm font-medium rounded-lg border border-red-100 transition-colors"
-                  title="Disconnect Google Drive"
-                >
-                  Disconnect
-                </button>
+                {driveMode === "oauth" ? (
+                  <button
+                    onClick={handleDisconnectDrive}
+                    className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-sm font-medium rounded-lg border border-red-100 transition-colors"
+                    title="Disconnect Google Drive"
+                  >
+                    Disconnect
+                  </button>
+                ) : (
+                  <span className="px-3 py-1.5 bg-neutral-50 text-neutral-600 text-sm font-medium rounded-lg border border-neutral-200">
+                    Managed by server
+                  </span>
+                )}
               </div>
             ) : (
               <button
