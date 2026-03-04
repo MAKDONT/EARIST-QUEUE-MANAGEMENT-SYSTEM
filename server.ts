@@ -49,7 +49,27 @@ let supabaseClient: SupabaseClient | null = null;
 let transporter: nodemailer.Transporter | null = null;
 
 async function setupTransporter() {
-  // Try Google OAuth2 first
+  // Try Google App Password first (more reliable in restricted environments)
+  if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
+    try {
+      const tempTransporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: process.env.GMAIL_USER,
+          pass: process.env.GMAIL_APP_PASSWORD,
+        },
+      });
+
+      // Don't verify on startup to avoid blocking if network is restricted
+      transporter = tempTransporter;
+      console.log("Gmail App Password Transporter Created Successfully");
+      return;
+    } catch (error: any) {
+      console.warn("Failed to create Gmail App Password transporter:", error.message);
+    }
+  }
+
+  // Try Google OAuth2 (may not work in restricted network environments)
   if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_REFRESH_TOKEN && process.env.GMAIL_USER) {
     try {
       const oauth2Client = new google.auth.OAuth2(
@@ -62,9 +82,7 @@ async function setupTransporter() {
         refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
       });
 
-      const { credentials } = await oauth2Client.refreshAccessToken();
-      const accessToken = credentials.access_token;
-
+      // Don't verify on startup - will refresh on first use
       const tempTransporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
@@ -73,46 +91,18 @@ async function setupTransporter() {
           clientId: process.env.GOOGLE_CLIENT_ID,
           clientSecret: process.env.GOOGLE_CLIENT_SECRET,
           refreshToken: process.env.GOOGLE_REFRESH_TOKEN,
-          accessToken: accessToken,
         },
       });
 
-      // Verify the connection configuration
-      await tempTransporter.verify();
       transporter = tempTransporter;
-      console.log("Gmail OAuth2 Transporter Created and Verified Successfully");
+      console.log("Gmail OAuth2 Transporter Created Successfully (verification deferred)");
       return;
     } catch (error: any) {
-      console.error("Failed to setup Gmail OAuth2. Attempting App Password fallback.");
-      console.error("Error details:", error.message);
+      console.warn("Failed to setup Gmail OAuth2:", error.message);
     }
   }
 
-  // Fallback to App Password
-  if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
-    try {
-      const tempTransporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: process.env.GMAIL_USER,
-          pass: process.env.GMAIL_APP_PASSWORD,
-        },
-      });
-
-      // Verify the connection configuration
-      await tempTransporter.verify();
-      transporter = tempTransporter;
-      console.log("Gmail App Password Transporter Created and Verified Successfully");
-      return;
-    } catch (error: any) {
-      console.error("Failed to verify Gmail credentials. Falling back to Ethereal Email.");
-      console.error("Error details:", error.message);
-    }
-  } else if (!process.env.GMAIL_USER) {
-    console.warn("GMAIL_USER not set. Falling back to Ethereal Email.");
-  }
-
-  // Fallback to Ethereal
+  // Fallback to Ethereal (for development/testing)
   try {
     const account = await nodemailer.createTestAccount();
     transporter = nodemailer.createTransport({
@@ -124,9 +114,9 @@ async function setupTransporter() {
         pass: account.pass,
       },
     });
-    console.log("Ethereal Email Test Account Created");
+    console.log("Ethereal Email Test Account Created (for testing)");
   } catch (error) {
-    console.error("Failed to create Ethereal test account:", error);
+    console.warn("Failed to create Ethereal test account:", error);
   }
 }
 setupTransporter();
