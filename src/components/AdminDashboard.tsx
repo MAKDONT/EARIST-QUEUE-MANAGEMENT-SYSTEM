@@ -35,6 +35,7 @@ export default function AdminDashboard() {
   
   // Faculty form
   const [facName, setFacName] = useState("");
+  const [facCollege, setFacCollege] = useState("");
   const [facDept, setFacDept] = useState("");
   const [facEmail, setFacEmail] = useState("");
   const [facPassword, setFacPassword] = useState("");
@@ -43,8 +44,33 @@ export default function AdminDashboard() {
 
   // Confirmation Modals
   const [deleteCollegeModal, setDeleteCollegeModal] = useState<{ isOpen: boolean; id: string; name: string }>({ isOpen: false, id: "", name: "" });
+  const [editCollegeModal, setEditCollegeModal] = useState<{ isOpen: boolean; id: string; name: string }>({ isOpen: false, id: "", name: "" });
+  const [editCollegeNameInput, setEditCollegeNameInput] = useState("");
+  const [editCollegeCodeInput, setEditCollegeCodeInput] = useState("");
+  const [editCollegeSaving, setEditCollegeSaving] = useState(false);
+  const [editCollegeError, setEditCollegeError] = useState("");
+  const [deleteDepartmentModal, setDeleteDepartmentModal] = useState<{ isOpen: boolean; id: string; name: string }>({ isOpen: false, id: "", name: "" });
   const [deleteFacultyModal, setDeleteFacultyModal] = useState<{ isOpen: boolean; id: string; name: string }>({ isOpen: false, id: "", name: "" });
-  const [resetPasswordModal, setResetPasswordModal] = useState<{ isOpen: boolean; id: string; name: string }>({ isOpen: false, id: "", name: "" });
+  const [editDepartmentModal, setEditDepartmentModal] = useState<{ isOpen: boolean; id: string; name: string }>({ isOpen: false, id: "", name: "" });
+  const [editDepartmentNameInput, setEditDepartmentNameInput] = useState("");
+  const [editDepartmentCollegeIdInput, setEditDepartmentCollegeIdInput] = useState("");
+  const [editDepartmentSaving, setEditDepartmentSaving] = useState(false);
+  const [editDepartmentError, setEditDepartmentError] = useState("");
+  const [editFacultyProfileModal, setEditFacultyProfileModal] = useState<{ isOpen: boolean; id: string; name: string }>({ isOpen: false, id: "", name: "" });
+  const [editFacultyNameInput, setEditFacultyNameInput] = useState("");
+  const [editFacultyEmailInput, setEditFacultyEmailInput] = useState("");
+  const [editFacultyProfileSaving, setEditFacultyProfileSaving] = useState(false);
+  const [editFacultyProfileError, setEditFacultyProfileError] = useState("");
+  const [editFacultyPasswordModal, setEditFacultyPasswordModal] = useState<{ isOpen: boolean; id: string; name: string }>({ isOpen: false, id: "", name: "" });
+  const [facultyPasswordInput, setFacultyPasswordInput] = useState("");
+  const [facultyPasswordConfirm, setFacultyPasswordConfirm] = useState("");
+  const [facultyPasswordSaving, setFacultyPasswordSaving] = useState(false);
+  const [facultyPasswordError, setFacultyPasswordError] = useState("");
+  const [adminPasswordModalOpen, setAdminPasswordModalOpen] = useState(false);
+  const [adminPasswordInput, setAdminPasswordInput] = useState("");
+  const [adminPasswordConfirm, setAdminPasswordConfirm] = useState("");
+  const [adminPasswordSaving, setAdminPasswordSaving] = useState(false);
+  const [adminPasswordError, setAdminPasswordError] = useState("");
 
   const [driveConnected, setDriveConnected] = useState(false);
   const [driveMode, setDriveMode] = useState<"service_account" | "oauth" | "none">("none");
@@ -375,6 +401,10 @@ export default function AdminDashboard() {
       setFacError("Faculty name is required.");
       return;
     }
+    if (!facCollege) {
+      setFacError("College selection is required.");
+      return;
+    }
     if (!facDept) {
       setFacError("Department selection is required.");
       return;
@@ -416,6 +446,7 @@ export default function AdminDashboard() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to add faculty");
       setFacName("");
+      setFacCollege("");
       setFacDept("");
       setFacEmail("");
       setFacPassword("");
@@ -445,6 +476,167 @@ export default function AdminDashboard() {
     }
   };
 
+  const openEditCollegeModal = (id: string, name: string, code: string) => {
+    setEditCollegeModal({ isOpen: true, id, name });
+    setEditCollegeNameInput(name);
+    setEditCollegeCodeInput(code || "");
+    setEditCollegeError("");
+  };
+
+  const closeEditCollegeModal = () => {
+    setEditCollegeModal({ isOpen: false, id: "", name: "" });
+    setEditCollegeNameInput("");
+    setEditCollegeCodeInput("");
+    setEditCollegeError("");
+  };
+
+  const handleSaveCollegeName = async () => {
+    const name = editCollegeNameInput.trim();
+    const code = editCollegeCodeInput.trim();
+    if (!name) {
+      setEditCollegeError("College name is required.");
+      return;
+    }
+    if (!code) {
+      setEditCollegeError("College code is required.");
+      return;
+    }
+
+    setEditCollegeSaving(true);
+    setEditCollegeError("");
+    try {
+      const res = await fetch(`/api/colleges/${editCollegeModal.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, code }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to update college name");
+
+      closeEditCollegeModal();
+      fetchColleges();
+      alert("College updated successfully.");
+    } catch (err: any) {
+      setEditCollegeError(err.message || "Failed to update college");
+    } finally {
+      setEditCollegeSaving(false);
+    }
+  };
+
+  const openEditDepartmentModal = (id: string, name: string, collegeId: string) => {
+    setEditDepartmentModal({ isOpen: true, id, name });
+    setEditDepartmentNameInput(name);
+    setEditDepartmentCollegeIdInput(String(collegeId || ""));
+    setEditDepartmentError("");
+  };
+
+  const closeEditDepartmentModal = () => {
+    setEditDepartmentModal({ isOpen: false, id: "", name: "" });
+    setEditDepartmentNameInput("");
+    setEditDepartmentCollegeIdInput("");
+    setEditDepartmentError("");
+  };
+
+  const handleSaveDepartmentName = async () => {
+    const name = editDepartmentNameInput.trim();
+    const college_id = editDepartmentCollegeIdInput;
+    if (!name) {
+      setEditDepartmentError("Department name is required.");
+      return;
+    }
+    if (!college_id) {
+      setEditDepartmentError("College selection is required.");
+      return;
+    }
+
+    setEditDepartmentSaving(true);
+    setEditDepartmentError("");
+    try {
+      const res = await fetch(`/api/departments/${editDepartmentModal.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, college_id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to update department name");
+
+      closeEditDepartmentModal();
+      fetchDepartments();
+      fetchFaculties();
+      alert("Department updated successfully.");
+    } catch (err: any) {
+      setEditDepartmentError(err.message || "Failed to update department");
+    } finally {
+      setEditDepartmentSaving(false);
+    }
+  };
+
+  const handleDeleteDepartment = async () => {
+    try {
+      const res = await fetch(`/api/departments/${deleteDepartmentModal.id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to delete department");
+      fetchDepartments();
+      fetchFaculties();
+      setDeleteDepartmentModal({ isOpen: false, id: "", name: "" });
+      alert("Department deleted successfully.");
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const openEditFacultyProfileModal = (id: string, name: string, email: string) => {
+    setEditFacultyProfileModal({ isOpen: true, id, name });
+    setEditFacultyNameInput(name || "");
+    setEditFacultyEmailInput(email || "");
+    setEditFacultyProfileError("");
+  };
+
+  const closeEditFacultyProfileModal = () => {
+    setEditFacultyProfileModal({ isOpen: false, id: "", name: "" });
+    setEditFacultyNameInput("");
+    setEditFacultyEmailInput("");
+    setEditFacultyProfileError("");
+  };
+
+  const handleSaveFacultyProfile = async () => {
+    const name = editFacultyNameInput.trim();
+    const email = editFacultyEmailInput.trim();
+
+    if (!name) {
+      setEditFacultyProfileError("Faculty name is required.");
+      return;
+    }
+    if (!email) {
+      setEditFacultyProfileError("Email is required.");
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setEditFacultyProfileError("Please enter a valid email address.");
+      return;
+    }
+
+    setEditFacultyProfileSaving(true);
+    setEditFacultyProfileError("");
+    try {
+      const res = await fetch(`/api/faculty/${editFacultyProfileModal.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to update faculty profile");
+      closeEditFacultyProfileModal();
+      fetchFaculties();
+      alert("Faculty profile updated successfully.");
+    } catch (err: any) {
+      setEditFacultyProfileError(err.message || "Failed to update faculty profile");
+    } finally {
+      setEditFacultyProfileSaving(false);
+    }
+  };
+
   const handleDeleteFaculty = async () => {
     try {
       const res = await fetch(`/api/faculty/${deleteFacultyModal.id}`, { method: "DELETE" });
@@ -456,23 +648,119 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleResetPassword = async () => {
+  const openEditFacultyPasswordModal = (id: string, name: string) => {
+    setEditFacultyPasswordModal({ isOpen: true, id, name });
+    setFacultyPasswordInput("");
+    setFacultyPasswordConfirm("");
+    setFacultyPasswordError("");
+  };
+
+  const closeEditFacultyPasswordModal = () => {
+    setEditFacultyPasswordModal({ isOpen: false, id: "", name: "" });
+    setFacultyPasswordInput("");
+    setFacultyPasswordConfirm("");
+    setFacultyPasswordError("");
+  };
+
+  const handleSaveFacultyPassword = async () => {
+    if (!facultyPasswordInput.trim()) {
+      setFacultyPasswordError("Password is required.");
+      return;
+    }
+    if (facultyPasswordInput.trim().length < 6) {
+      setFacultyPasswordError("Password must be at least 6 characters long.");
+      return;
+    }
+    if (facultyPasswordInput !== facultyPasswordConfirm) {
+      setFacultyPasswordError("Passwords do not match.");
+      return;
+    }
+
+    setFacultyPasswordSaving(true);
+    setFacultyPasswordError("");
     try {
-      const res = await fetch(`/api/faculty/${resetPasswordModal.id}/reset-password`, {
+      const res = await fetch(`/api/faculty/${editFacultyPasswordModal.id}/password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: "earist2024" })
+        body: JSON.stringify({ password: facultyPasswordInput }),
       });
-      if (!res.ok) throw new Error("Failed to reset password");
-      setResetPasswordModal({ isOpen: false, id: "", name: "" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to update password");
+      closeEditFacultyPasswordModal();
+      alert("Faculty password updated successfully.");
     } catch (err: any) {
-      alert(err.message);
+      setFacultyPasswordError(err.message || "Failed to update password");
+    } finally {
+      setFacultyPasswordSaving(false);
+    }
+  };
+
+  const openAdminPasswordModal = () => {
+    setAdminPasswordInput("");
+    setAdminPasswordConfirm("");
+    setAdminPasswordError("");
+    setAdminPasswordModalOpen(true);
+  };
+
+  const closeAdminPasswordModal = () => {
+    setAdminPasswordModalOpen(false);
+    setAdminPasswordInput("");
+    setAdminPasswordConfirm("");
+    setAdminPasswordError("");
+  };
+
+  const handleSaveAdminPassword = async () => {
+    if (!adminPasswordInput.trim()) {
+      setAdminPasswordError("Password is required.");
+      return;
+    }
+    if (adminPasswordInput.trim().length < 6) {
+      setAdminPasswordError("Password must be at least 6 characters long.");
+      return;
+    }
+    if (adminPasswordInput !== adminPasswordConfirm) {
+      setAdminPasswordError("Passwords do not match.");
+      return;
+    }
+
+    setAdminPasswordSaving(true);
+    setAdminPasswordError("");
+    try {
+      const res = await fetch("/api/admin/password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: adminPasswordInput }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to update admin password");
+      closeAdminPasswordModal();
+      alert("Admin password updated successfully.");
+    } catch (err: any) {
+      setAdminPasswordError(err.message || "Failed to update admin password");
+    } finally {
+      setAdminPasswordSaving(false);
     }
   };
 
   const servingStudents = liveQueue.filter((item) => item.status === "serving");
   const nextStudents = liveQueue.filter((item) => item.status === "next");
   const waitingStudents = liveQueue.filter((item) => item.status === "waiting");
+  const filteredDepartments = departments.filter((d: any) => String(d.college_id) === String(facCollege));
+
+  const departmentById = new Map<string, any>((departments || []).map((d: any) => [String(d.id), d]));
+  const collegeById = new Map<string, any>((colleges || []).map((c: any) => [String(c.id), c]));
+  const facultiesByCollege = (colleges || []).map((college: any) => {
+    const items = (faculties || []).filter((fac: any) => {
+      const dept = departmentById.get(String(fac.department_id));
+      return dept && String(dept.college_id) === String(college.id);
+    });
+    return { id: String(college.id), name: college.name, items };
+  });
+  const unassignedCollegeFaculties = (faculties || []).filter((fac: any) => {
+    const dept = departmentById.get(String(fac.department_id));
+    if (!dept) return true;
+    return !collegeById.has(String(dept.college_id));
+  });
 
   return (
     <div className="min-h-screen bg-neutral-100 flex flex-col">
@@ -531,15 +819,10 @@ export default function AdminDashboard() {
             )}
           </div>
           <button
-            onClick={async () => {
-              const res = await fetch('/api/test/make-all-available');
-              const data = await res.json();
-              alert('Updated: ' + JSON.stringify(data));
-              fetchFaculties();
-            }}
-            className="px-4 py-2 bg-emerald-600 text-white font-medium rounded-xl hover:bg-emerald-700 transition-colors"
+            onClick={openAdminPasswordModal}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl transition-colors"
           >
-            Make All Faculty Available (Test)
+            <KeyRound className="w-4 h-4" /> Edit Admin Password
           </button>
           <button
             onClick={handleLogout}
@@ -699,13 +982,22 @@ export default function AdminDashboard() {
                 colleges.map((c: any) => (
                   <li key={c.id} className="p-3 bg-neutral-50 rounded-xl text-neutral-700 font-medium flex items-center justify-between group">
                     <span>{c.name} ({c.code})</span>
-                    <button
-                      onClick={() => setDeleteCollegeModal({ isOpen: true, id: c.id, name: c.name })}
-                      className="p-1.5 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                      title="Delete College"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => openEditCollegeModal(c.id, c.name, c.code)}
+                        className="px-2 py-1 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
+                        title="Edit College"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => setDeleteCollegeModal({ isOpen: true, id: c.id, name: c.name })}
+                        className="p-1.5 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete College"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </li>
                 ))
               )}
@@ -808,8 +1100,29 @@ export default function AdminDashboard() {
                 <li className="text-neutral-400 text-sm">No departments found.</li>
               ) : (
                 departments.map((d: any) => (
-                  <li key={d.id} className="p-3 bg-neutral-50 rounded-xl text-neutral-700 font-medium">
-                    {d.name}
+                  <li key={d.id} className="p-3 bg-neutral-50 rounded-xl text-neutral-700 font-medium flex items-center justify-between group">
+                    <div>
+                      <p>{d.name}</p>
+                      <p className="text-xs text-neutral-500">
+                        {collegeById.get(String(d.college_id))?.name || "Unknown College"}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => openEditDepartmentModal(d.id, d.name, String(d.college_id || ""))}
+                        className="px-2 py-1 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
+                        title="Edit Department"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => setDeleteDepartmentModal({ isOpen: true, id: d.id, name: d.name })}
+                        className="p-1.5 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete Department"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </li>
                 ))
               )}
@@ -848,16 +1161,41 @@ export default function AdminDashboard() {
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-neutral-700 block">
+                College
+              </label>
+              <select
+                value={facCollege}
+                onChange={(e) => {
+                  setFacCollege(e.target.value);
+                  setFacDept("");
+                }}
+                className="w-full p-4 border-2 border-neutral-200 rounded-2xl bg-neutral-50 focus:border-emerald-500 focus:ring-0 outline-none transition-colors"
+                required
+              >
+                <option value="" disabled>Select College</option>
+                {colleges.map((c: any) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-neutral-700 block">
                 Department
               </label>
               <select
                 value={facDept}
                 onChange={(e) => setFacDept(e.target.value)}
+                disabled={!facCollege}
                 className="w-full p-4 border-2 border-neutral-200 rounded-2xl bg-neutral-50 focus:border-emerald-500 focus:ring-0 outline-none transition-colors"
                 required
               >
-                <option value="" disabled>Select Department</option>
-                {departments.map((d: any) => (
+                <option value="" disabled>
+                  {facCollege ? "Select Department" : "Select College First"}
+                </option>
+                {filteredDepartments.map((d: any) => (
                   <option key={d.id} value={d.id}>
                     {d.name}
                   </option>
@@ -895,7 +1233,7 @@ export default function AdminDashboard() {
 
             <button
               type="submit"
-              disabled={addingFac || !facName || !facDept || !facEmail || !facPassword}
+              disabled={addingFac || !facName || !facCollege || !facDept || !facEmail || !facPassword}
               className="w-full flex items-center justify-center gap-2 py-4 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-neutral-300 disabled:cursor-not-allowed text-white text-lg font-bold rounded-2xl shadow-lg transition-all active:scale-95"
             >
               <Plus className="w-5 h-5" />
@@ -905,75 +1243,276 @@ export default function AdminDashboard() {
         </div>
       </main>
 
-      {/* Registered Faculties Table */}
-      <section className="px-8 pb-12 max-w-7xl mx-auto w-full">
-        <div className="bg-white rounded-3xl shadow-lg p-8">
-          <h2 className="text-2xl font-bold text-neutral-900 mb-6">Registered Faculties</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b-2 border-neutral-100">
-                  <th className="py-4 px-4 font-bold text-neutral-600 uppercase tracking-wider text-sm">Name</th>
-                  <th className="py-4 px-4 font-bold text-neutral-600 uppercase tracking-wider text-sm">Email</th>
-                  <th className="py-4 px-4 font-bold text-neutral-600 uppercase tracking-wider text-sm">Faculty Code</th>
-                  <th className="py-4 px-4 font-bold text-neutral-600 uppercase tracking-wider text-sm">Department</th>
-                  <th className="py-4 px-4 font-bold text-neutral-600 uppercase tracking-wider text-sm">Status</th>
-                  <th className="py-4 px-4 font-bold text-neutral-600 uppercase tracking-wider text-sm text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-100">
-                {faculties.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="py-8 text-center text-neutral-500">
-                      No faculties registered yet.
-                    </td>
-                  </tr>
-                ) : (
-                  faculties.map((fac) => (
-                    <tr key={fac.id} className="hover:bg-neutral-50 transition-colors group">
-                      <td className="py-4 px-4 font-medium text-neutral-900">{fac.name}</td>
-                      <td className="py-4 px-4 text-neutral-600">{fac.email}</td>
-                      <td className="py-4 px-4 font-mono text-sm text-neutral-500">{fac.faculty_code}</td>
-                      <td className="py-4 px-4 text-neutral-600">
-                        {fac.department || "Unknown"}
-                      </td>
-                      <td className="py-4 px-4">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          fac.status === 'available' ? 'bg-green-100 text-green-800' :
-                          fac.status === 'busy' ? 'bg-red-100 text-red-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>
-                          {fac.status}
-                        </span>
-                      </td>
-                      <td className="py-4 px-4 text-right">
-                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => setResetPasswordModal({ isOpen: true, id: fac.id, name: fac.name })}
-                            className="p-2 text-neutral-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                            title="Reset Password"
-                          >
-                            <KeyRound className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => setDeleteFacultyModal({ isOpen: true, id: fac.id, name: fac.name })}
-                            className="p-2 text-neutral-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Delete Faculty"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+      {/* Registered Faculties by College */}
+      <section className="px-8 pb-12 max-w-7xl mx-auto w-full space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold text-neutral-900">Registered Faculties by College</h2>
+          <p className="text-sm text-neutral-500 mt-1">Faculty records are grouped per college for easier monitoring.</p>
         </div>
+
+        {faculties.length === 0 ? (
+          <div className="bg-white rounded-3xl shadow-lg p-8 text-center text-neutral-500">
+            No faculties registered yet.
+          </div>
+        ) : (
+          <>
+            {facultiesByCollege.map((group) => (
+              <div key={group.id} className="bg-white rounded-3xl shadow-lg p-8">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold text-neutral-900">{group.name}</h3>
+                  <span className="px-3 py-1 rounded-lg bg-neutral-100 text-neutral-600 text-sm font-medium">
+                    {group.items.length} faculty
+                  </span>
+                </div>
+                {group.items.length === 0 ? (
+                  <div className="p-4 rounded-2xl bg-neutral-50 text-neutral-500 text-sm border border-neutral-200">
+                    No faculty registered for this college.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b-2 border-neutral-100">
+                          <th className="py-4 px-4 font-bold text-neutral-600 uppercase tracking-wider text-sm">Name</th>
+                          <th className="py-4 px-4 font-bold text-neutral-600 uppercase tracking-wider text-sm">Email</th>
+                          <th className="py-4 px-4 font-bold text-neutral-600 uppercase tracking-wider text-sm">Faculty Code</th>
+                          <th className="py-4 px-4 font-bold text-neutral-600 uppercase tracking-wider text-sm">Department</th>
+                          <th className="py-4 px-4 font-bold text-neutral-600 uppercase tracking-wider text-sm">Status</th>
+                          <th className="py-4 px-4 font-bold text-neutral-600 uppercase tracking-wider text-sm text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-neutral-100">
+                        {group.items.map((fac: any) => (
+                          <tr key={fac.id} className="hover:bg-neutral-50 transition-colors group">
+                            <td className="py-4 px-4 font-medium text-neutral-900">{fac.name}</td>
+                            <td className="py-4 px-4 text-neutral-600">{fac.email}</td>
+                            <td className="py-4 px-4 font-mono text-sm text-neutral-500">{fac.faculty_code}</td>
+                            <td className="py-4 px-4 text-neutral-600">
+                              {departmentById.get(String(fac.department_id))?.name || fac.department || "Unknown Department"}
+                            </td>
+                            <td className="py-4 px-4">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                fac.status === 'available' ? 'bg-green-100 text-green-800' :
+                                fac.status === 'busy' ? 'bg-red-100 text-red-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                {fac.status}
+                              </span>
+                            </td>
+                            <td className="py-4 px-4 text-right">
+                              <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={() => openEditFacultyProfileModal(fac.id, fac.name, fac.email)}
+                                  className="px-2 py-1 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
+                                  title="Edit Faculty Profile"
+                                >
+                                  Edit Info
+                                </button>
+                                <button
+                                  onClick={() => openEditFacultyPasswordModal(fac.id, fac.name)}
+                                  className="p-2 text-neutral-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                  title="Edit Password"
+                                >
+                                  <KeyRound className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => setDeleteFacultyModal({ isOpen: true, id: fac.id, name: fac.name })}
+                                  className="p-2 text-neutral-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                  title="Delete Faculty"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {unassignedCollegeFaculties.length > 0 && (
+              <div className="bg-white rounded-3xl shadow-lg p-8">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold text-neutral-900">Unassigned / Unknown College</h3>
+                  <span className="px-3 py-1 rounded-lg bg-amber-100 text-amber-700 text-sm font-medium">
+                    {unassignedCollegeFaculties.length} faculty
+                  </span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b-2 border-neutral-100">
+                        <th className="py-4 px-4 font-bold text-neutral-600 uppercase tracking-wider text-sm">Name</th>
+                        <th className="py-4 px-4 font-bold text-neutral-600 uppercase tracking-wider text-sm">Email</th>
+                        <th className="py-4 px-4 font-bold text-neutral-600 uppercase tracking-wider text-sm">Faculty Code</th>
+                        <th className="py-4 px-4 font-bold text-neutral-600 uppercase tracking-wider text-sm">Department</th>
+                        <th className="py-4 px-4 font-bold text-neutral-600 uppercase tracking-wider text-sm">Status</th>
+                        <th className="py-4 px-4 font-bold text-neutral-600 uppercase tracking-wider text-sm text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-100">
+                      {unassignedCollegeFaculties.map((fac: any) => (
+                        <tr key={fac.id} className="hover:bg-neutral-50 transition-colors group">
+                          <td className="py-4 px-4 font-medium text-neutral-900">{fac.name}</td>
+                          <td className="py-4 px-4 text-neutral-600">{fac.email}</td>
+                          <td className="py-4 px-4 font-mono text-sm text-neutral-500">{fac.faculty_code}</td>
+                          <td className="py-4 px-4 text-neutral-600">
+                            {departmentById.get(String(fac.department_id))?.name || fac.department || "Unknown Department"}
+                          </td>
+                          <td className="py-4 px-4">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              fac.status === 'available' ? 'bg-green-100 text-green-800' :
+                              fac.status === 'busy' ? 'bg-red-100 text-red-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {fac.status}
+                            </span>
+                          </td>
+                          <td className="py-4 px-4 text-right">
+                            <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={() => openEditFacultyProfileModal(fac.id, fac.name, fac.email)}
+                                className="px-2 py-1 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
+                                title="Edit Faculty Profile"
+                              >
+                                Edit Info
+                              </button>
+                              <button
+                                onClick={() => openEditFacultyPasswordModal(fac.id, fac.name)}
+                                className="p-2 text-neutral-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                title="Edit Password"
+                              >
+                                <KeyRound className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => setDeleteFacultyModal({ isOpen: true, id: fac.id, name: fac.name })}
+                                className="p-2 text-neutral-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Delete Faculty"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </section>
 
       {/* Modals */}
+      {editCollegeModal.isOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+            <h2 className="text-2xl font-bold text-neutral-900 mb-2">Edit College</h2>
+            <p className="text-neutral-600 mb-6">
+              Update the details for <span className="font-bold text-neutral-900">{editCollegeModal.name}</span>.
+            </p>
+            <div className="space-y-4 mb-6">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-neutral-700 block">College Name</label>
+                <input
+                  type="text"
+                  value={editCollegeNameInput}
+                  onChange={(e) => setEditCollegeNameInput(e.target.value)}
+                  placeholder="Enter college name"
+                  className="w-full p-3 border-2 border-neutral-200 rounded-xl bg-neutral-50 focus:border-indigo-500 focus:ring-0 outline-none transition-colors"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-neutral-700 block">College Code</label>
+                <input
+                  type="text"
+                  value={editCollegeCodeInput}
+                  onChange={(e) => setEditCollegeCodeInput(e.target.value)}
+                  placeholder="Enter college code"
+                  className="w-full p-3 border-2 border-neutral-200 rounded-xl bg-neutral-50 focus:border-indigo-500 focus:ring-0 outline-none transition-colors"
+                />
+              </div>
+              {editCollegeError && <p className="text-sm text-red-600">{editCollegeError}</p>}
+            </div>
+            <div className="flex gap-4">
+              <button
+                onClick={closeEditCollegeModal}
+                disabled={editCollegeSaving}
+                className="flex-1 py-3 px-4 bg-neutral-100 hover:bg-neutral-200 disabled:bg-neutral-200 text-neutral-700 font-bold rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveCollegeName}
+                disabled={editCollegeSaving}
+                className="flex-1 py-3 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-bold rounded-xl transition-colors"
+              >
+                {editCollegeSaving ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editDepartmentModal.isOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+            <h2 className="text-2xl font-bold text-neutral-900 mb-2">Edit Department</h2>
+            <p className="text-neutral-600 mb-6">
+              Update the details for <span className="font-bold text-neutral-900">{editDepartmentModal.name}</span>.
+            </p>
+            <div className="space-y-4 mb-6">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-neutral-700 block">Department Name</label>
+                <input
+                  type="text"
+                  value={editDepartmentNameInput}
+                  onChange={(e) => setEditDepartmentNameInput(e.target.value)}
+                  placeholder="Enter department name"
+                  className="w-full p-3 border-2 border-neutral-200 rounded-xl bg-neutral-50 focus:border-indigo-500 focus:ring-0 outline-none transition-colors"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-neutral-700 block">College</label>
+                <select
+                  value={editDepartmentCollegeIdInput}
+                  onChange={(e) => setEditDepartmentCollegeIdInput(e.target.value)}
+                  className="w-full p-3 border-2 border-neutral-200 rounded-xl bg-neutral-50 focus:border-indigo-500 focus:ring-0 outline-none transition-colors"
+                >
+                  <option value="" disabled>Select College</option>
+                  {colleges.map((c: any) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {editDepartmentError && <p className="text-sm text-red-600">{editDepartmentError}</p>}
+            </div>
+            <div className="flex gap-4">
+              <button
+                onClick={closeEditDepartmentModal}
+                disabled={editDepartmentSaving}
+                className="flex-1 py-3 px-4 bg-neutral-100 hover:bg-neutral-200 disabled:bg-neutral-200 text-neutral-700 font-bold rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveDepartmentName}
+                disabled={editDepartmentSaving}
+                className="flex-1 py-3 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-bold rounded-xl transition-colors"
+              >
+                {editDepartmentSaving ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {deleteCollegeModal.isOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
@@ -995,6 +1534,36 @@ export default function AdminDashboard() {
               </button>
               <button
                 onClick={handleDeleteCollege}
+                className="flex-1 py-3 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteDepartmentModal.isOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+            <div className="flex items-center gap-4 text-red-600 mb-6">
+              <div className="p-3 bg-red-100 rounded-full">
+                <AlertTriangle className="w-8 h-8" />
+              </div>
+              <h2 className="text-2xl font-bold text-neutral-900">Delete Department</h2>
+            </div>
+            <p className="text-neutral-600 mb-8">
+              Are you sure you want to delete <span className="font-bold text-neutral-900">{deleteDepartmentModal.name}</span>? This action cannot be undone.
+            </p>
+            <div className="flex gap-4">
+              <button
+                onClick={() => setDeleteDepartmentModal({ isOpen: false, id: "", name: "" })}
+                className="flex-1 py-3 px-4 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-bold rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteDepartment}
                 className="flex-1 py-3 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-colors"
               >
                 Delete
@@ -1034,30 +1603,160 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {resetPasswordModal.isOpen && (
+      {editFacultyProfileModal.isOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+            <h2 className="text-2xl font-bold text-neutral-900 mb-2">Edit Faculty Profile</h2>
+            <p className="text-neutral-600 mb-6">
+              Update the profile for <span className="font-bold text-neutral-900">{editFacultyProfileModal.name}</span>.
+            </p>
+            <div className="space-y-4 mb-6">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-neutral-700 block">Full Name</label>
+                <input
+                  type="text"
+                  value={editFacultyNameInput}
+                  onChange={(e) => setEditFacultyNameInput(e.target.value)}
+                  placeholder="Enter full name"
+                  className="w-full p-3 border-2 border-neutral-200 rounded-xl bg-neutral-50 focus:border-indigo-500 focus:ring-0 outline-none transition-colors"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-neutral-700 block">Email Address</label>
+                <input
+                  type="email"
+                  value={editFacultyEmailInput}
+                  onChange={(e) => setEditFacultyEmailInput(e.target.value)}
+                  placeholder="Enter email address"
+                  className="w-full p-3 border-2 border-neutral-200 rounded-xl bg-neutral-50 focus:border-indigo-500 focus:ring-0 outline-none transition-colors"
+                />
+              </div>
+              {editFacultyProfileError && <p className="text-sm text-red-600">{editFacultyProfileError}</p>}
+            </div>
+            <div className="flex gap-4">
+              <button
+                onClick={closeEditFacultyProfileModal}
+                disabled={editFacultyProfileSaving}
+                className="flex-1 py-3 px-4 bg-neutral-100 hover:bg-neutral-200 disabled:bg-neutral-200 text-neutral-700 font-bold rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveFacultyProfile}
+                disabled={editFacultyProfileSaving}
+                className="flex-1 py-3 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-bold rounded-xl transition-colors"
+              >
+                {editFacultyProfileSaving ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editFacultyPasswordModal.isOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
             <div className="flex items-center gap-4 text-indigo-600 mb-6">
               <div className="p-3 bg-indigo-100 rounded-full">
                 <KeyRound className="w-8 h-8" />
               </div>
-              <h2 className="text-2xl font-bold text-neutral-900">Reset Password</h2>
+              <h2 className="text-2xl font-bold text-neutral-900">Edit Faculty Password</h2>
             </div>
-            <p className="text-neutral-600 mb-8">
-              Are you sure you want to reset the password for <span className="font-bold text-neutral-900">{resetPasswordModal.name}</span> to <span className="font-mono bg-neutral-100 px-2 py-1 rounded">earist2024</span>?
+            <p className="text-neutral-600 mb-6">
+              Set a new password for <span className="font-bold text-neutral-900">{editFacultyPasswordModal.name}</span>.
             </p>
+            <div className="space-y-4 mb-6">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-neutral-700 block">New Password</label>
+                <input
+                  type="password"
+                  value={facultyPasswordInput}
+                  onChange={(e) => setFacultyPasswordInput(e.target.value)}
+                  placeholder="Enter new password"
+                  className="w-full p-3 border-2 border-neutral-200 rounded-xl bg-neutral-50 focus:border-indigo-500 focus:ring-0 outline-none transition-colors"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-neutral-700 block">Confirm Password</label>
+                <input
+                  type="password"
+                  value={facultyPasswordConfirm}
+                  onChange={(e) => setFacultyPasswordConfirm(e.target.value)}
+                  placeholder="Re-enter new password"
+                  className="w-full p-3 border-2 border-neutral-200 rounded-xl bg-neutral-50 focus:border-indigo-500 focus:ring-0 outline-none transition-colors"
+                />
+              </div>
+              {facultyPasswordError && <p className="text-sm text-red-600">{facultyPasswordError}</p>}
+            </div>
             <div className="flex gap-4">
               <button
-                onClick={() => setResetPasswordModal({ isOpen: false, id: "", name: "" })}
-                className="flex-1 py-3 px-4 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-bold rounded-xl transition-colors"
+                onClick={closeEditFacultyPasswordModal}
+                disabled={facultyPasswordSaving}
+                className="flex-1 py-3 px-4 bg-neutral-100 hover:bg-neutral-200 disabled:bg-neutral-200 text-neutral-700 font-bold rounded-xl transition-colors"
               >
                 Cancel
               </button>
               <button
-                onClick={handleResetPassword}
-                className="flex-1 py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-colors"
+                onClick={handleSaveFacultyPassword}
+                disabled={facultyPasswordSaving}
+                className="flex-1 py-3 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-bold rounded-xl transition-colors"
               >
-                Reset Password
+                {facultyPasswordSaving ? "Saving..." : "Save Password"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {adminPasswordModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+            <div className="flex items-center gap-4 text-indigo-600 mb-6">
+              <div className="p-3 bg-indigo-100 rounded-full">
+                <KeyRound className="w-8 h-8" />
+              </div>
+              <h2 className="text-2xl font-bold text-neutral-900">Edit Admin Password</h2>
+            </div>
+            <p className="text-neutral-600 mb-6">
+              Enter a new password for the admin account.
+            </p>
+            <div className="space-y-4 mb-6">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-neutral-700 block">New Password</label>
+                <input
+                  type="password"
+                  value={adminPasswordInput}
+                  onChange={(e) => setAdminPasswordInput(e.target.value)}
+                  placeholder="Enter new admin password"
+                  className="w-full p-3 border-2 border-neutral-200 rounded-xl bg-neutral-50 focus:border-indigo-500 focus:ring-0 outline-none transition-colors"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-neutral-700 block">Confirm Password</label>
+                <input
+                  type="password"
+                  value={adminPasswordConfirm}
+                  onChange={(e) => setAdminPasswordConfirm(e.target.value)}
+                  placeholder="Re-enter admin password"
+                  className="w-full p-3 border-2 border-neutral-200 rounded-xl bg-neutral-50 focus:border-indigo-500 focus:ring-0 outline-none transition-colors"
+                />
+              </div>
+              {adminPasswordError && <p className="text-sm text-red-600">{adminPasswordError}</p>}
+            </div>
+            <div className="flex gap-4">
+              <button
+                onClick={closeAdminPasswordModal}
+                disabled={adminPasswordSaving}
+                className="flex-1 py-3 px-4 bg-neutral-100 hover:bg-neutral-200 disabled:bg-neutral-200 text-neutral-700 font-bold rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveAdminPassword}
+                disabled={adminPasswordSaving}
+                className="flex-1 py-3 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-bold rounded-xl transition-colors"
+              >
+                {adminPasswordSaving ? "Saving..." : "Save Password"}
               </button>
             </div>
           </div>

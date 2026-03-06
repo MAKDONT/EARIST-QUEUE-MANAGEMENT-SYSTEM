@@ -23,6 +23,7 @@ export default function KioskView() {
   const [selectedFaculty, setSelectedFaculty] = useState<string | null>(null);
   const [expandedFaculty, setExpandedFaculty] = useState<string | null>(null);
   const [selectedTimePeriod, setSelectedTimePeriod] = useState<string | null>(null);
+  const [consultationConcern, setConsultationConcern] = useState("");
   const [bookedSlots, setBookedSlots] = useState<{faculty_id: string, time_period: string}[]>([]);
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
@@ -168,6 +169,10 @@ export default function KioskView() {
       setError("Please select a faculty member and choose a time slot.");
       return;
     }
+    if (!consultationConcern.trim()) {
+      setError("Please provide your consultation concern before confirming.");
+      return;
+    }
 
     setLoading(true);
     setError("");
@@ -183,6 +188,7 @@ export default function KioskView() {
           student_name: studentName,
           student_email: studentEmail,
           course: course,
+          purpose: consultationConcern.trim(),
           time_period: selectedTimePeriod,
         }),
       });
@@ -403,9 +409,22 @@ export default function KioskView() {
           </div>
 
           <div className="pt-8 mt-auto border-t border-neutral-200">
+            <div className="mb-5">
+              <label className="block text-lg font-semibold text-neutral-800 mb-2">
+                Consultation Concern <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={consultationConcern}
+                onChange={(e) => setConsultationConcern(e.target.value)}
+                placeholder="Briefly describe why you need this consultation..."
+                rows={4}
+                className="w-full p-4 border-2 border-neutral-200 rounded-2xl bg-white focus:border-indigo-500 focus:ring-0 outline-none transition-colors resize-none text-base"
+                required
+              />
+            </div>
             <button
               onClick={handleJoinQueue}
-              disabled={loading || !studentId || !selectedFaculty || !selectedTimePeriod}
+              disabled={loading || !studentId || !selectedFaculty || !selectedTimePeriod || !consultationConcern.trim()}
               className="w-full py-6 bg-indigo-600 hover:bg-indigo-700 disabled:bg-neutral-300 disabled:text-neutral-500 disabled:cursor-not-allowed text-white text-3xl font-bold rounded-2xl shadow-xl transition-all active:scale-95 flex items-center justify-center gap-4"
             >
               {loading ? "Processing..." : "Confirm Booking"}

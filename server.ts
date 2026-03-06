@@ -396,7 +396,13 @@ async function startServer() {
   // Admin: Set admin password
   app.post("/api/admin/password", async (req, res) => {
     try {
-      const { password } = req.body;
+      const password = typeof req.body?.password === "string" ? req.body.password.trim() : "";
+      if (!password) {
+        return res.status(400).json({ error: "Password is required" });
+      }
+      if (password.length < 6) {
+        return res.status(400).json({ error: "Password must be at least 6 characters long" });
+      }
       const { data: existing } = await getSupabase()
         .from("colleges")
         .select("id")
@@ -447,6 +453,37 @@ async function startServer() {
     }
   });
 
+  // Admin: Update college name
+  app.patch("/api/colleges/:id", async (req, res) => {
+    try {
+      const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+      const code = typeof req.body?.code === "string" ? req.body.code.trim() : "";
+
+      if (!name) {
+        return res.status(400).json({ error: "College name is required." });
+      }
+      if (!code) {
+        return res.status(400).json({ error: "College code is required." });
+      }
+      if (code === "ADMIN_PASS") {
+        return res.status(400).json({ error: "College code cannot be ADMIN_PASS." });
+      }
+
+      const { data, error } = await getSupabase()
+        .from("colleges")
+        .update({ name, code })
+        .eq("id", req.params.id)
+        .neq("code", "ADMIN_PASS")
+        .select()
+        .single();
+
+      if (error) throw error;
+      res.json(data);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Admin: Get all departments
   app.get("/api/departments", async (req, res) => {
     try {
@@ -474,16 +511,41 @@ async function startServer() {
     }
   });
 
-  // Temporary endpoint to make all faculty available
-  app.get("/api/test/make-all-available", async (req, res) => {
+  // Admin: Update department name
+  app.patch("/api/departments/:id", async (req, res) => {
     try {
+      const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+      const college_id = typeof req.body?.college_id === "string" ? req.body.college_id.trim() : String(req.body?.college_id || "").trim();
+      if (!name) {
+        return res.status(400).json({ error: "Department name is required." });
+      }
+      if (!college_id) {
+        return res.status(400).json({ error: "College selection is required." });
+      }
+
       const { data, error } = await getSupabase()
-        .from("faculty")
-        .update({ status: "available" })
-        .neq("status", "available")
-        .select();
+        .from("departments")
+        .update({ name, college_id })
+        .eq("id", req.params.id)
+        .select()
+        .single();
+
       if (error) throw error;
-      res.json({ success: true, updated: data });
+      res.json(data);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Admin: Delete department
+  app.delete("/api/departments/:id", async (req, res) => {
+    try {
+      const { error } = await getSupabase()
+        .from("departments")
+        .delete()
+        .eq("id", req.params.id);
+      if (error) throw error;
+      res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -506,25 +568,6 @@ async function startServer() {
       res.status(500).json({ error: err.message });
     }
   });
-
-  // Auto-run the update on server start for testing
-  setTimeout(async () => {
-    try {
-      console.log("Auto-updating all faculty to 'available' for testing...");
-      const { data, error } = await getSupabase()
-        .from("faculty")
-        .update({ status: "available" })
-        .neq("status", "available")
-        .select();
-      if (error) {
-        console.error("Auto-update failed:", error);
-      } else {
-        console.log("Auto-update success. Updated rows:", data?.length);
-      }
-    } catch (err) {
-      console.error("Auto-update error:", err);
-    }
-  }, 2000);
 
   // Admin: Delete college
   app.delete("/api/colleges/:id", async (req, res) => {
@@ -554,10 +597,16 @@ async function startServer() {
     }
   });
 
-  // Admin: Reset faculty password
-  app.post("/api/faculty/:id/reset-password", async (req, res) => {
+  const updateFacultyPassword = async (req: express.Request, res: express.Response) => {
     try {
-      const { password } = req.body;
+      const password = typeof req.body?.password === "string" ? req.body.password.trim() : "";
+      if (!password) {
+        return res.status(400).json({ error: "Password is required" });
+      }
+      if (password.length < 6) {
+        return res.status(400).json({ error: "Password must be at least 6 characters long" });
+      }
+
       const { error } = await getSupabase()
         .from("faculty")
         .update({ password })
@@ -567,7 +616,13 @@ async function startServer() {
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
-  });
+  };
+
+  // Admin: Update faculty password
+  app.post("/api/faculty/:id/password", updateFacultyPassword);
+
+  // Backward compatibility for older clients still using the reset route.
+  app.post("/api/faculty/:id/reset-password", updateFacultyPassword);
 
   // Admin: Add faculty
   app.post("/api/faculty", async (req, res) => {
@@ -779,6 +834,7 @@ async function startServer() {
           faculty_id,
           status: "waiting",
           student_email: targetEmail || null,
+          purpose: purpose || null,
           meet_link: meetLinkToSave
         })
         .select()
@@ -847,6 +903,38 @@ async function startServer() {
       }).filter((q: any) => q.time_period);
 
       res.json(bookedSlots);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Admin: Update faculty profile
+  app.patch("/api/faculty/:id", async (req, res) => {
+    try {
+      const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+      const email = typeof req.body?.email === "string" ? req.body.email.trim() : "";
+
+      if (!name) {
+        return res.status(400).json({ error: "Faculty name is required." });
+      }
+      if (!email) {
+        return res.status(400).json({ error: "Email is required." });
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ error: "Invalid email format." });
+      }
+
+      const { data, error } = await getSupabase()
+        .from("faculty")
+        .update({ name, full_name: name, email })
+        .eq("id", req.params.id)
+        .select()
+        .single();
+      if (error) throw error;
+
+      res.json(data);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
