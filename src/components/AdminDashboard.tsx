@@ -16,12 +16,12 @@ interface LiveQueueItem {
 
 interface DriveRecording {
   id: string;
+  path: string;
   name: string;
   mimeType: string;
   createdTime: string | null;
   modifiedTime: string | null;
   size: number | null;
-  webViewLink: string | null;
   consultationId: string | null;
   facultyId: string | null;
   facultyName: string | null;
@@ -104,6 +104,7 @@ export default function AdminDashboard() {
   const [driveRecordingsNextPageToken, setDriveRecordingsNextPageToken] = useState<string | null>(null);
   const [driveRecordingsSearch, setDriveRecordingsSearch] = useState("");
   const [selectedRecordingId, setSelectedRecordingId] = useState<string | null>(null);
+  const [recordingStorageReady, setRecordingStorageReady] = useState(false);
 
   useEffect(() => {
     if (localStorage.getItem("user_role") !== "admin") {
@@ -114,6 +115,7 @@ export default function AdminDashboard() {
     fetchColleges();
     fetchFaculties();
     checkDriveStatus();
+    void checkRecordingStorageStatus();
     fetchLiveQueue();
   }, [navigate]);
 
@@ -163,16 +165,15 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (localStorage.getItem("user_role") !== "admin") return;
 
-    if (!driveConnected) {
+    if (!recordingStorageReady) {
       setDriveRecordings([]);
-      setDriveRecordingsError("");
       setDriveRecordingsNextPageToken(null);
       setSelectedRecordingId(null);
       return;
     }
 
     void fetchDriveRecordings();
-  }, [driveConnected]);
+  }, [recordingStorageReady]);
 
   const checkDriveStatus = async () => {
     try {
@@ -191,6 +192,28 @@ export default function AdminDashboard() {
     }
   };
 
+  const checkRecordingStorageStatus = async () => {
+    try {
+      const res = await fetch("/api/recordings/status");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Supabase recording storage is unavailable.");
+      }
+
+      const ready = Boolean(data.ready);
+      setRecordingStorageReady(ready);
+      if (ready) {
+        setDriveRecordingsError("");
+      }
+      return ready;
+    } catch (err) {
+      console.error("Failed to check recording storage status", err);
+      setRecordingStorageReady(false);
+      setDriveRecordingsError(err instanceof Error ? err.message : "Supabase recording storage is unavailable.");
+      return false;
+    }
+  };
+
   const fetchDriveRecordings = async (loadMore = false) => {
     const pageToken = loadMore ? driveRecordingsNextPageToken : null;
     if (loadMore && !pageToken) return;
@@ -200,10 +223,10 @@ export default function AdminDashboard() {
 
     try {
       const query = pageToken ? `?pageToken=${encodeURIComponent(pageToken)}` : "";
-      const res = await fetch(`/api/drive/recordings${query}`);
+      const res = await fetch(`/api/recordings${query}`);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(data.error || "Failed to load Drive recordings.");
+        throw new Error(data.error || "Failed to load Supabase recordings.");
       }
 
       const files = Array.isArray(data.files) ? (data.files as DriveRecording[]) : [];
@@ -217,8 +240,8 @@ export default function AdminDashboard() {
         return mergedFiles[0]?.id || null;
       });
     } catch (err) {
-      console.error("Failed to fetch Drive recordings", err);
-      setDriveRecordingsError(err instanceof Error ? err.message : "Failed to load Drive recordings.");
+      console.error("Failed to fetch Supabase recordings", err);
+      setDriveRecordingsError(err instanceof Error ? err.message : "Failed to load Supabase recordings.");
     } finally {
       setDriveRecordingsLoading(false);
     }
@@ -342,7 +365,7 @@ export default function AdminDashboard() {
   const handleDisconnectDrive = async () => {
     if (!oauthConnected) {
       if (oauthExpired) {
-        alert("Your Google OAuth session has expired. Reconnect Google to restore Drive uploads and Meet auto-links.");
+        alert("Your Google OAuth session has expired. Reconnect Google to restore Meet auto-links.");
       } else if (driveMode === "service_account") {
         alert("Server-side Google integration is managed by environment variables. There is no admin OAuth connection to disconnect.");
       } else {
@@ -350,7 +373,7 @@ export default function AdminDashboard() {
       }
       return;
     }
-    if (!confirm("Are you sure you want to disconnect Google? New recordings will not upload and Meet links will not auto-generate until you reconnect.")) return;
+    if (!confirm("Are you sure you want to disconnect Google? Meet links will not auto-generate until you reconnect. Recordings will continue saving to Supabase Storage.")) return;
     
     try {
       const res = await fetch("/api/drive/disconnect", { method: "POST" });
@@ -905,7 +928,7 @@ export default function AdminDashboard() {
     filteredDriveRecordings[0] ||
     null;
   const selectedRecordingContentUrl = selectedRecording
-    ? `/api/drive/recordings/${encodeURIComponent(selectedRecording.id)}/content`
+    ? `/api/recordings/content?path=${encodeURIComponent(selectedRecording.path)}`
     : "";
 
   const departmentById = new Map<string, any>((departments || []).map((d: any) => [String(d.id), d]));
@@ -947,7 +970,7 @@ export default function AdminDashboard() {
                     <path d="M12 4.5L2.2 21.5H12L21.8 4.5H12Z" fill="#FFBA00"/>
                   </svg>
                   <span className="text-sm font-medium">
-                    {driveMode === "service_account" ? "Drive Connected (Server)" : "Google Connected"}
+                    {driveMode === "service_account" ? "Google Connected (Server)" : "Google Connected"}
                   </span>
                 </div>
                 {oauthConnected && googleExpiryLabel ? (
@@ -1120,13 +1143,19 @@ export default function AdminDashboard() {
                 <FolderOpen className="w-6 h-6 text-amber-600" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-neutral-900">Drive Recordings</h2>
-                <p className="text-sm text-neutral-500">Browse consultation audio uploaded to Google Drive, including the faculty and student tied to each recording.</p>
+                <h2 className="text-2xl font-bold text-neutral-900">Supabase Recordings</h2>
+                <p className="text-sm text-neutral-500">Browse consultation audio stored in Supabase Storage, including the faculty and student tied to each recording.</p>
               </div>
             </div>
             <button
-              onClick={() => void fetchDriveRecordings()}
-              disabled={!driveConnected || driveRecordingsLoading}
+              onClick={() => {
+                void checkRecordingStorageStatus().then((ready) => {
+                  if (ready) {
+                    void fetchDriveRecordings();
+                  }
+                });
+              }}
+              disabled={driveRecordingsLoading}
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-neutral-100 hover:bg-neutral-200 disabled:bg-neutral-100 disabled:text-neutral-400 text-neutral-700 rounded-xl transition-colors"
             >
               <RefreshCw className={`w-4 h-4 ${driveRecordingsLoading ? "animate-spin" : ""}`} />
@@ -1134,9 +1163,9 @@ export default function AdminDashboard() {
             </button>
           </div>
 
-          {!driveConnected ? (
+          {!recordingStorageReady ? (
             <div className="p-6 rounded-2xl bg-neutral-50 text-neutral-500 text-sm border border-neutral-200">
-              Connect Google Drive first. Once Drive is connected, uploaded consultation audio will appear here automatically.
+              Supabase recording storage is unavailable right now. Recordings will appear here once storage is reachable again.
             </div>
           ) : (
             <>
@@ -1164,7 +1193,7 @@ export default function AdminDashboard() {
 
               {driveRecordingsLoading && driveRecordings.length === 0 ? (
                 <div className="p-6 rounded-2xl bg-neutral-50 text-neutral-500 text-sm border border-neutral-200">
-                  Loading Drive recordings...
+                  Loading Supabase recordings...
                 </div>
               ) : filteredDriveRecordings.length === 0 ? (
                 <div className="p-6 rounded-2xl bg-neutral-50 text-neutral-500 text-sm border border-neutral-200">
@@ -1278,23 +1307,21 @@ export default function AdminDashboard() {
 
                         <div className="flex flex-wrap gap-3">
                           <a
-                            href={`${selectedRecordingContentUrl}?download=1`}
+                            href={`${selectedRecordingContentUrl}&download=1`}
                             className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors"
                           >
                             <Download className="w-4 h-4" />
                             Download
                           </a>
-                          {selectedRecording.webViewLink ? (
-                            <a
-                              href={selectedRecording.webViewLink}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-neutral-100 text-neutral-700 rounded-xl border border-neutral-200 transition-colors"
-                            >
-                              <ExternalLink className="w-4 h-4" />
-                              Open in Drive
-                            </a>
-                          ) : null}
+                          <a
+                            href={selectedRecordingContentUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-neutral-100 text-neutral-700 rounded-xl border border-neutral-200 transition-colors"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                            Open in New Tab
+                          </a>
                         </div>
                       </>
                     ) : (

@@ -142,37 +142,38 @@ export default function FacultyDashboard() {
   };
 
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
-  const [driveConnected, setDriveConnected] = useState(false);
+  const [recordingStorageReady, setRecordingStorageReady] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  const checkDriveStatus = async () => {
+  const checkRecordingStorageStatus = async () => {
     try {
-      const res = await fetch(`/api/drive/status`);
+      const res = await fetch(`/api/recordings/status`);
       if (!res.ok) {
         throw new Error(`HTTP error! status: ${res.status}`);
       }
       const data = await res.json();
-      const connected = Boolean(data.driveConnected ?? data.connected);
-      setDriveConnected(connected);
-      return connected;
+      const ready = Boolean(data.ready);
+      setRecordingStorageReady(ready);
+      return ready;
     } catch (err) {
-      console.error("Failed to check drive status", err);
-      return null;
+      console.error("Failed to check recording storage status", err);
+      setRecordingStorageReady(false);
+      return false;
     }
   };
 
   useEffect(() => {
-    void checkDriveStatus();
+    void checkRecordingStorageStatus();
 
-    const refreshDriveStatus = () => {
-      void checkDriveStatus();
+    const refreshRecordingStorageStatus = () => {
+      void checkRecordingStorageStatus();
     };
 
-    window.addEventListener("focus", refreshDriveStatus);
-    const intervalId = window.setInterval(refreshDriveStatus, 30000);
+    window.addEventListener("focus", refreshRecordingStorageStatus);
+    const intervalId = window.setInterval(refreshRecordingStorageStatus, 30000);
 
     return () => {
-      window.removeEventListener("focus", refreshDriveStatus);
+      window.removeEventListener("focus", refreshRecordingStorageStatus);
       window.clearInterval(intervalId);
     };
   }, []);
@@ -208,10 +209,10 @@ export default function FacultyDashboard() {
     mixedAudioContextRef.current = null;
   };
 
-  const uploadToDrive = async (blob: Blob, recordingContext: RecordingContext | null) => {
-    const latestDriveStatus = await checkDriveStatus();
-    if (latestDriveStatus === false) {
-      alert("Google Drive is not connected. Recording was not uploaded.");
+  const uploadRecording = async (blob: Blob, recordingContext: RecordingContext | null) => {
+    const storageReady = await checkRecordingStorageStatus();
+    if (!storageReady) {
+      alert("Supabase recording storage is not available. Recording was not uploaded.");
       return;
     }
 
@@ -227,28 +228,19 @@ export default function FacultyDashboard() {
     }
 
     try {
-      const res = await fetch('/api/drive/upload', {
+      const res = await fetch('/api/recordings/upload', {
         method: 'POST',
         body: formData
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
-        if (
-          res.status === 401 ||
-          data.reconnectRequired ||
-          String(data.error || "").toLowerCase().includes("not connected")
-        ) {
-          setDriveConnected(false);
-        }
-        throw new Error(data.hint ? `${data.error}\n${data.hint}` : data.error || "Upload failed");
+        setRecordingStorageReady(false);
+        throw new Error(data.error || "Upload failed");
       }
-      setDriveConnected(true);
-      if (data.warning) {
-        alert(data.warning);
-      }
+      setRecordingStorageReady(true);
     } catch (err) {
-      console.error("Failed to upload to drive", err);
-      const message = err instanceof Error ? err.message : "Failed to save to Google Drive.";
+      console.error("Failed to upload recording", err);
+      const message = err instanceof Error ? err.message : "Failed to save to Supabase Storage.";
       alert(message);
     } finally {
       setUploading(false);
@@ -333,7 +325,7 @@ export default function FacultyDashboard() {
         const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
         const currentRecordingContext = recordingContextRef.current;
         recordingContextRef.current = null;
-        await uploadToDrive(blob, currentRecordingContext);
+        await uploadRecording(blob, currentRecordingContext);
       };
       
       recorder.start();
@@ -850,39 +842,29 @@ export default function FacultyDashboard() {
 
                 <div className="pt-4 border-t border-neutral-200">
                   <p className="text-sm font-bold text-neutral-900 mb-3">Integrations</p>
-                  {driveConnected ? (
+                  {recordingStorageReady ? (
                     <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl flex items-center gap-3">
-                      <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-sm shrink-0">
-                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M15.3 18.5H5.4L10.3 10L15.3 18.5Z" fill="#0066DA"/>
-                          <path d="M8.7 18.5H18.6L13.7 10L8.7 18.5Z" fill="#00AC47"/>
-                          <path d="M12 4.5L7.1 13H16.9L12 4.5Z" fill="#EA4335"/>
-                          <path d="M12 4.5L2.2 21.5H12L21.8 4.5H12Z" fill="#FFBA00"/>
-                        </svg>
+                      <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-sm shrink-0 text-emerald-700 font-bold text-xs">
+                        SB
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-emerald-800 truncate">Admin Drive Connected</p>
-                        <p className="text-xs text-emerald-600 truncate">Audio saves automatically</p>
+                        <p className="text-sm font-medium text-emerald-800 truncate">Supabase Storage Ready</p>
+                        <p className="text-xs text-emerald-600 truncate">Audio uploads automatically after each session</p>
                       </div>
                     </div>
                   ) : (
                     <div className="p-3 bg-neutral-50 border border-neutral-200 rounded-xl flex items-center gap-3">
-                      <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-sm shrink-0 opacity-50">
-                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M15.3 18.5H5.4L10.3 10L15.3 18.5Z" fill="#0066DA"/>
-                          <path d="M8.7 18.5H18.6L13.7 10L8.7 18.5Z" fill="#00AC47"/>
-                          <path d="M12 4.5L7.1 13H16.9L12 4.5Z" fill="#EA4335"/>
-                          <path d="M12 4.5L2.2 21.5H12L21.8 4.5H12Z" fill="#FFBA00"/>
-                        </svg>
+                      <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-sm shrink-0 opacity-50 text-neutral-500 font-bold text-xs">
+                        SB
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-neutral-600 truncate">Drive Not Connected</p>
-                        <p className="text-xs text-neutral-500 truncate">Admin needs to connect</p>
+                        <p className="text-sm font-medium text-neutral-600 truncate">Supabase Storage Unavailable</p>
+                        <p className="text-xs text-neutral-500 truncate">Recording uploads will retry when storage is reachable</p>
                       </div>
                     </div>
                   )}
                   {uploading && (
-                    <p className="text-xs text-indigo-600 mt-2 text-center animate-pulse">Uploading audio to Drive...</p>
+                    <p className="text-xs text-indigo-600 mt-2 text-center animate-pulse">Uploading audio to Supabase Storage...</p>
                   )}
                 </div>
               </div>

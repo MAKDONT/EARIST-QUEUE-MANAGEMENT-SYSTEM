@@ -69,6 +69,19 @@ const unwrapEnvValue = (value?: string) => {
     : trimmed;
 };
 
+const SUPABASE_RECORDINGS_BUCKET =
+  unwrapEnvValue(process.env.SUPABASE_RECORDINGS_BUCKET) || "consultation-recordings";
+const SUPABASE_RECORDINGS_PREFIX =
+  (unwrapEnvValue(process.env.SUPABASE_RECORDINGS_PREFIX) || "recordings").replace(/^\/+|\/+$/g, "");
+const parsedRecordingRetentionHours = Number.parseInt(
+  unwrapEnvValue(process.env.SUPABASE_RECORDINGS_RETENTION_HOURS),
+  10
+);
+const SUPABASE_RECORDINGS_RETENTION_HOURS =
+  Number.isFinite(parsedRecordingRetentionHours) && parsedRecordingRetentionHours > 0
+    ? parsedRecordingRetentionHours
+    : 48;
+
 const normalizeEmail = (value: unknown) => (
   typeof value === "string" ? value.trim().toLowerCase() : ""
 );
@@ -284,6 +297,123 @@ async function startServer() {
     const studentPart = sanitizeDriveFileNamePart(studentBase, "student");
 
     return `consultation-audio-${timestampPart}-${facultyPart}-${studentPart}.webm`;
+  };
+  const sanitizeRecordingTokenPart = (value: string, fallback: string) => {
+    const normalized = value
+      .trim()
+      .normalize("NFKD")
+      .replace(/[^\x00-\x7F]/g, "")
+      .replace(/[^A-Za-z0-9._-]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+
+    return (normalized || fallback).slice(0, 96);
+  };
+  const buildSupabaseRecordingObjectName = (params: {
+    uploadedAt: string;
+    extension?: string | null;
+    consultationId?: string | null;
+    facultyId?: string | null;
+    studentId?: string | null;
+    studentNumber?: string | null;
+    facultyName?: string | null;
+    studentName?: string | null;
+  }) => {
+    const safeExtension = sanitizeRecordingTokenPart((params.extension || "webm").replace(/^\.+/, ""), "webm").toLowerCase();
+    const timestampPart = params.uploadedAt.replace(/:/g, "-");
+    const fileParts = [
+      timestampPart,
+      `consultation-${sanitizeRecordingTokenPart(params.consultationId || "", "unknown")}`,
+      `faculty-${sanitizeRecordingTokenPart(params.facultyId || "", "unknown")}`,
+      `student-${sanitizeRecordingTokenPart(params.studentId || "", "unknown")}`,
+    ];
+
+    if (params.studentNumber) {
+      fileParts.push(`number-${sanitizeRecordingTokenPart(params.studentNumber, "unknown")}`);
+    }
+    if (params.facultyName) {
+      fileParts.push(`facultyname-${sanitizeDriveFileNamePart(params.facultyName, "faculty")}`);
+    }
+    if (params.studentName) {
+      fileParts.push(`studentname-${sanitizeDriveFileNamePart(params.studentName, "student")}`);
+    }
+
+    return `${fileParts.join("__")}.${safeExtension}`;
+  };
+  const buildSupabaseRecordingPath = (objectName: string) =>
+    SUPABASE_RECORDINGS_PREFIX ? `${SUPABASE_RECORDINGS_PREFIX}/${objectName}` : objectName;
+  const parseSupabaseRecordingObjectName = (objectName: string) => {
+    const nameWithoutExtension = objectName.replace(/\.[^.]+$/, "");
+    const segments = nameWithoutExtension.split("__");
+    const metadata = {
+      consultationId: null as string | null,
+      facultyId: null as string | null,
+      studentId: null as string | null,
+      studentNumber: null as string | null,
+    };
+
+    for (const segment of segments.slice(1)) {
+      if (segment.startsWith("consultation-")) {
+        metadata.consultationId = segment.slice("consultation-".length) || null;
+      } else if (segment.startsWith("faculty-")) {
+        metadata.facultyId = segment.slice("faculty-".length) || null;
+      } else if (segment.startsWith("student-")) {
+        metadata.studentId = segment.slice("student-".length) || null;
+      } else if (segment.startsWith("number-")) {
+        metadata.studentNumber = segment.slice("number-".length) || null;
+      }
+    }
+
+    return metadata;
+  };
+  const parseSupabaseRecordingTimestamp = (objectName: string) => {
+    const timestampSegment = objectName.split("__")[0] || "";
+    const normalizedTimestamp = timestampSegment.replace(
+      /T(\d{2})-(\d{2})-(\d{2})(\.\d+Z)?$/,
+      "T$1:$2:$3$4"
+    );
+    const parsed = new Date(normalizedTimestamp);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
+  const toAbsoluteSupabaseUrl = (value: string) => {
+    if (/^https?:\/\//i.test(value)) return value;
+    const baseUrl = trimTrailingSlash(process.env.SUPABASE_URL || "");
+    return `${baseUrl}${value.startsWith("/") ? "" : "/"}${value}`;
+  };
+  const isSupabaseRecordingPath = (value: string) => {
+    const normalized = value.replace(/^\/+/, "");
+    return SUPABASE_RECORDINGS_PREFIX
+      ? normalized.startsWith(`${SUPABASE_RECORDINGS_PREFIX}/`)
+      : normalized.length > 0;
+  };
+  let recordingsBucketReadyPromise: Promise<void> | null = null;
+  const ensureSupabaseRecordingsBucket = async () => {
+    if (!recordingsBucketReadyPromise) {
+      recordingsBucketReadyPromise = (async () => {
+        const supabase = getSupabase();
+        const { data: bucket, error: getBucketError } = await supabase.storage.getBucket(SUPABASE_RECORDINGS_BUCKET);
+        const bucketMissing =
+          !bucket &&
+          (!getBucketError || /not found|not exist|does not exist/i.test(getBucketError.message || ""));
+
+        if (getBucketError && !bucketMissing) {
+          throw getBucketError;
+        }
+
+        if (bucketMissing) {
+          const { error: createBucketError } = await supabase.storage.createBucket(SUPABASE_RECORDINGS_BUCKET, {
+            public: false,
+          });
+          if (createBucketError && !/already exists/i.test(createBucketError.message || "")) {
+            throw createBucketError;
+          }
+        }
+      })().catch((err) => {
+        recordingsBucketReadyPromise = null;
+        throw err;
+      });
+    }
+
+    return recordingsBucketReadyPromise;
   };
   const normalizeOAuthRedirectUri = (value: string) => {
     const trimmed = value.trim();
@@ -1655,6 +1785,63 @@ async function startServer() {
     }
   };
 
+  const runSupabaseRecordingsCleanup = async () => {
+    try {
+      await ensureSupabaseRecordingsBucket();
+      const storage = getSupabase().storage.from(SUPABASE_RECORDINGS_BUCKET);
+      const cutoffMs = Date.now() - SUPABASE_RECORDINGS_RETENTION_HOURS * 60 * 60 * 1000;
+      const limit = 100;
+      let offset = 0;
+
+      while (true) {
+        const { data, error } = await storage.list(SUPABASE_RECORDINGS_PREFIX, {
+          limit,
+          offset,
+          sortBy: { column: "name", order: "asc" },
+        });
+
+        if (error) {
+          throw error;
+        }
+
+        const items = (data || []).filter((item: any) => typeof item.name === "string" && item.name.length > 0);
+        if (items.length === 0) {
+          break;
+        }
+
+        const stalePaths = items
+          .filter((item: any) => {
+            const createdAtValue =
+              typeof item.created_at === "string"
+                ? new Date(item.created_at)
+                : parseSupabaseRecordingTimestamp(item.name);
+
+            return !!createdAtValue && !Number.isNaN(createdAtValue.getTime()) && createdAtValue.getTime() < cutoffMs;
+          })
+          .map((item: any) => buildSupabaseRecordingPath(item.name));
+
+        if (stalePaths.length > 0) {
+          const { error: removeError } = await storage.remove(stalePaths);
+          if (removeError) {
+            throw removeError;
+          }
+
+          for (const stalePath of stalePaths) {
+            console.log(`[Supabase Cleanup] Deleted old recording: ${stalePath}`);
+          }
+        }
+
+        if (items.length < limit) {
+          break;
+        }
+
+        offset += items.length;
+      }
+    } catch (err) {
+      console.error("[Supabase Cleanup] Error:", err);
+    }
+  };
+
   const getMsUntilNextDriveCleanup = () => {
     const now = new Date();
     const nextRun = new Date(now);
@@ -1673,6 +1860,7 @@ async function startServer() {
 
     setTimeout(async () => {
       await runDriveCleanup();
+      await runSupabaseRecordingsCleanup();
       scheduleDriveCleanup();
     }, delay);
   };
@@ -1793,6 +1981,363 @@ async function startServer() {
       reconnectRequired: oauthStatus.expired && driveMode !== "service_account",
       tokenMaxAgeDays: TOKEN_MAX_AGE_DAYS,
     });
+  });
+
+  app.get("/api/recordings/status", async (_req, res) => {
+    try {
+      await ensureSupabaseRecordingsBucket();
+      res.json({
+        ready: true,
+        provider: "supabase_storage",
+        bucket: SUPABASE_RECORDINGS_BUCKET,
+        prefix: SUPABASE_RECORDINGS_PREFIX || null,
+      });
+    } catch (err: any) {
+      console.error("Supabase Recordings Status Error:", err);
+      res.status(500).json({
+        ready: false,
+        error: err?.message || "Supabase recording storage is unavailable.",
+      });
+    }
+  });
+
+  app.get("/api/recordings", async (req, res) => {
+    try {
+      await ensureSupabaseRecordingsBucket();
+      const supabase = getSupabase();
+      const pageOffsetRaw = Number.parseInt(getQueryString(req.query.pageToken) || "0", 10);
+      const pageOffset = Number.isFinite(pageOffsetRaw) && pageOffsetRaw > 0 ? pageOffsetRaw : 0;
+      const limit = 100;
+
+      const { data, error } = await supabase.storage.from(SUPABASE_RECORDINGS_BUCKET).list(SUPABASE_RECORDINGS_PREFIX, {
+        limit,
+        offset: pageOffset,
+        sortBy: { column: "name", order: "desc" },
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      const files = (data || []).filter((file: any) => typeof file.name === "string" && file.name.length > 0);
+      const parsedFiles = files.map((file: any) => {
+        const parsed = parseSupabaseRecordingObjectName(file.name);
+        const metadata = file.metadata || {};
+        const sizeValue =
+          typeof metadata.size === "number"
+            ? metadata.size
+            : Number.isFinite(Number(metadata.size))
+              ? Number(metadata.size)
+              : null;
+
+        return {
+          id: buildSupabaseRecordingPath(file.name),
+          path: buildSupabaseRecordingPath(file.name),
+          name: file.name,
+          mimeType: typeof metadata.mimetype === "string" ? metadata.mimetype : "audio/webm",
+          createdTime:
+            typeof file.created_at === "string"
+              ? file.created_at
+              : parseSupabaseRecordingTimestamp(file.name)?.toISOString() || null,
+          modifiedTime: typeof file.updated_at === "string" ? file.updated_at : null,
+          size: sizeValue,
+          consultationId: parsed.consultationId,
+          facultyId: parsed.facultyId,
+          studentId: parsed.studentId,
+          studentNumber: parsed.studentNumber,
+        };
+      });
+
+      const consultationIds = Array.from(
+        new Set(parsedFiles.map((file) => file.consultationId || "").filter(Boolean))
+      );
+      const consultationResult = consultationIds.length
+        ? await supabase
+            .from("queue")
+            .select("id, faculty_id, student_id")
+            .in("id", consultationIds)
+        : { data: [], error: null as any };
+
+      if (consultationResult.error) {
+        throw consultationResult.error;
+      }
+
+      const consultationById = new Map<string, { faculty_id: string | null; student_id: string | null }>(
+        (consultationResult.data || []).map((item: any) => [
+          String(item.id),
+          {
+            faculty_id: item.faculty_id || null,
+            student_id: item.student_id || null,
+          },
+        ])
+      );
+
+      const facultyIds = Array.from(
+        new Set(
+          parsedFiles
+            .map((file) => file.facultyId || consultationById.get(file.consultationId || "")?.faculty_id || "")
+            .filter(Boolean)
+        )
+      );
+      const studentIds = Array.from(
+        new Set(
+          parsedFiles
+            .map((file) => file.studentId || consultationById.get(file.consultationId || "")?.student_id || "")
+            .filter(Boolean)
+        )
+      );
+
+      const [facultyResult, studentResult] = await Promise.all([
+        facultyIds.length
+          ? supabase.from("faculty").select("id, name").in("id", facultyIds)
+          : Promise.resolve({ data: [], error: null as any }),
+        studentIds.length
+          ? supabase.from("students").select("id, full_name, student_number").in("id", studentIds)
+          : Promise.resolve({ data: [], error: null as any }),
+      ]);
+
+      if (facultyResult.error) {
+        throw facultyResult.error;
+      }
+      if (studentResult.error) {
+        throw studentResult.error;
+      }
+
+      const facultyNameById = new Map<string, string>(
+        (facultyResult.data || []).map((item: any) => [String(item.id), item.name || ""])
+      );
+      const studentById = new Map<string, { name: string | null; studentNumber: string | null }>(
+        (studentResult.data || []).map((item: any) => [
+          String(item.id),
+          {
+            name: item.full_name || null,
+            studentNumber: item.student_number || null,
+          },
+        ])
+      );
+
+      res.json({
+        files: parsedFiles.map((file) => {
+          const resolvedFacultyId = file.facultyId || consultationById.get(file.consultationId || "")?.faculty_id || null;
+          const resolvedStudentId = file.studentId || consultationById.get(file.consultationId || "")?.student_id || null;
+          const studentRecord = resolvedStudentId ? studentById.get(String(resolvedStudentId)) : null;
+
+          return {
+            ...file,
+            facultyId: resolvedFacultyId,
+            facultyName: resolvedFacultyId ? facultyNameById.get(String(resolvedFacultyId)) || null : null,
+            studentId: resolvedStudentId,
+            studentName: studentRecord?.name || null,
+            studentNumber: studentRecord?.studentNumber || file.studentNumber || null,
+          };
+        }),
+        nextPageToken: files.length === limit ? String(pageOffset + files.length) : null,
+        mode: "supabase_storage",
+      });
+    } catch (err: any) {
+      console.error("Supabase Recordings List Error:", err);
+      res.status(500).json({
+        error: err?.message || "Failed to list Supabase recordings.",
+      });
+    }
+  });
+
+  app.get("/api/recordings/content", async (req, res) => {
+    try {
+      const recordingPath = getQueryString(req.query.path)?.trim() || "";
+      if (!recordingPath) {
+        return res.status(400).json({ error: "Missing recording path." });
+      }
+      if (!isSupabaseRecordingPath(recordingPath)) {
+        return res.status(400).json({ error: "Invalid recording path." });
+      }
+
+      await ensureSupabaseRecordingsBucket();
+      const supabase = getSupabase();
+      const { data: signedUrlData, error: signedUrlError } = await supabase
+        .storage
+        .from(SUPABASE_RECORDINGS_BUCKET)
+        .createSignedUrl(recordingPath, 60);
+
+      if (signedUrlError || !signedUrlData?.signedUrl) {
+        throw signedUrlError || new Error("Failed to create a signed URL for the recording.");
+      }
+
+      const isDownload = getQueryString(req.query.download) === "1";
+      const upstream = await fetch(toAbsoluteSupabaseUrl(signedUrlData.signedUrl), {
+        headers: {
+          ...(typeof req.headers.range === "string" ? { Range: req.headers.range } : {}),
+        },
+      });
+
+      if (!upstream.ok) {
+        let errorMessage = `Supabase Storage returned ${upstream.status}.`;
+        const contentType = upstream.headers.get("content-type") || "";
+        if (contentType.includes("application/json")) {
+          const payload = await upstream.json().catch(() => null);
+          errorMessage = payload?.error?.message || payload?.message || errorMessage;
+        } else {
+          const text = await upstream.text();
+          if (text) errorMessage = text;
+        }
+
+        if (upstream.status === 404) {
+          return res.status(404).json({ error: "Recording not found." });
+        }
+
+        throw new Error(errorMessage);
+      }
+
+      const fileName = path.basename(recordingPath) || "recording.webm";
+      const headerNames = ["accept-ranges", "content-length", "content-range", "content-type", "etag", "last-modified"];
+      for (const headerName of headerNames) {
+        const headerValue = upstream.headers.get(headerName);
+        if (headerValue) {
+          res.setHeader(headerName, headerValue);
+        }
+      }
+
+      res.setHeader(
+        "Content-Disposition",
+        `${isDownload ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(fileName)}`
+      );
+
+      if (!upstream.body) {
+        throw new Error("Supabase Storage did not return recording content.");
+      }
+
+      res.status(upstream.status);
+      const stream = Readable.fromWeb(upstream.body as any);
+      stream.on("error", (streamErr) => {
+        console.error("Supabase Recording Stream Error:", streamErr);
+        res.destroy(streamErr instanceof Error ? streamErr : undefined);
+      });
+      stream.pipe(res);
+    } catch (err: any) {
+      console.error("Supabase Recording Content Error:", err);
+      if (res.headersSent) {
+        res.end();
+        return;
+      }
+
+      res.status(500).json({
+        error: err?.message || "Failed to load Supabase recording.",
+      });
+    }
+  });
+
+  app.post("/api/recordings/upload", upload.single("file"), async (req, res) => {
+    try {
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ error: "Missing file" });
+      }
+
+      await ensureSupabaseRecordingsBucket();
+      const supabase = getSupabase();
+      const facultyId = getBodyString(req.body?.faculty_id);
+      const consultationId = getBodyString(req.body?.consultation_id);
+      let resolvedFacultyId = facultyId;
+      let resolvedStudentId = getBodyString(req.body?.student_id);
+      let resolvedStudentName = getBodyString(req.body?.student_name);
+      let resolvedStudentNumber = getBodyString(req.body?.student_number);
+      let resolvedFacultyName = "";
+
+      if (consultationId) {
+        const { data: consultationData, error: consultationError } = await supabase
+          .from("queue")
+          .select("id, faculty_id, student_id")
+          .eq("id", consultationId)
+          .maybeSingle();
+
+        if (consultationError) {
+          throw consultationError;
+        }
+
+        if (consultationData) {
+          resolvedFacultyId = resolvedFacultyId || consultationData.faculty_id || "";
+          resolvedStudentId = resolvedStudentId || consultationData.student_id || "";
+        }
+      }
+
+      if (resolvedFacultyId) {
+        const { data: facultyData, error: facultyError } = await supabase
+          .from("faculty")
+          .select("id, name")
+          .eq("id", resolvedFacultyId)
+          .maybeSingle();
+
+        if (facultyError) {
+          throw facultyError;
+        }
+
+        resolvedFacultyName = facultyData?.name || "";
+      }
+
+      if (resolvedStudentId) {
+        const { data: studentData, error: studentError } = await supabase
+          .from("students")
+          .select("id, full_name, student_number")
+          .eq("id", resolvedStudentId)
+          .maybeSingle();
+
+        if (studentError) {
+          throw studentError;
+        }
+
+        if (studentData) {
+          resolvedStudentName = resolvedStudentName || studentData.full_name || "";
+          resolvedStudentNumber = resolvedStudentNumber || studentData.student_number || "";
+        }
+      }
+
+      const uploadTimestamp = new Date().toISOString();
+      const extensionFromName = path.extname(file.originalname || "").replace(/^\./, "");
+      const extensionFromMime = (file.mimetype || "").split("/").pop() || "";
+      const objectName = buildSupabaseRecordingObjectName({
+        uploadedAt: uploadTimestamp,
+        extension: extensionFromName || extensionFromMime || "webm",
+        consultationId: consultationId || null,
+        facultyId: resolvedFacultyId || null,
+        studentId: resolvedStudentId || null,
+        studentNumber: resolvedStudentNumber || null,
+        facultyName: resolvedFacultyName || resolvedFacultyId || null,
+        studentName: resolvedStudentName || null,
+      });
+      const objectPath = buildSupabaseRecordingPath(objectName);
+      const uploadFileBuffer = fs.readFileSync(file.path);
+
+      const { error: uploadError } = await supabase.storage.from(SUPABASE_RECORDINGS_BUCKET).upload(
+        objectPath,
+        uploadFileBuffer,
+        {
+          contentType: file.mimetype || "audio/webm",
+          upsert: false,
+        }
+      );
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      fs.unlinkSync(file.path);
+
+      res.json({
+        success: true,
+        path: objectPath,
+        provider: "supabase_storage",
+        bucket: SUPABASE_RECORDINGS_BUCKET,
+      });
+    } catch (err: any) {
+      console.error("Supabase Recording Upload Error:", err);
+      if (req.file && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+
+      res.status(500).json({
+        error: err?.message || "Failed to upload recording to Supabase Storage.",
+      });
+    }
   });
 
   app.get("/api/drive/recordings", async (req, res) => {
