@@ -421,6 +421,17 @@ async function startServer() {
     }
   };
 
+  const clearExpiredOAuthTokens = (
+    mode: "service_account" | "oauth" | "none",
+    err: any
+  ) => {
+    if (mode === "oauth" && (err?.message || "").includes("invalid_grant") && fs.existsSync(TOKEN_PATH)) {
+      fs.unlinkSync(TOKEN_PATH);
+      return true;
+    }
+    return false;
+  };
+
   const getGoogleAccessToken = async (authClient: any) => {
     const accessToken = await authClient.getAccessToken();
     const tokenValue =
@@ -1611,9 +1622,7 @@ async function startServer() {
       persistOAuthTokens(authContext);
     } catch (err: any) {
       console.error("[Drive Cleanup] Error:", err);
-      if (activeMode === "oauth" && (err?.message || "").includes("invalid_grant") && fs.existsSync(TOKEN_PATH)) {
-        fs.unlinkSync(TOKEN_PATH);
-      }
+      clearExpiredOAuthTokens(activeMode, err);
     }
   };
 
@@ -1757,6 +1766,146 @@ async function startServer() {
     });
   });
 
+  app.get("/api/drive/recordings", async (req, res) => {
+    let activeMode: "service_account" | "oauth" | "none" = "none";
+    try {
+      const authContext = getDriveAuthContext(req);
+      activeMode = authContext.mode;
+      const drive = google.drive({ version: "v3", auth: authContext.auth });
+      const pageToken = getQueryString(req.query.pageToken) || undefined;
+
+      const response = await drive.files.list({
+        q: "trashed = false and appProperties has { key='source' and value='consultation-system' }",
+        fields: "nextPageToken, files(id, name, mimeType, createdTime, modifiedTime, size, webViewLink, appProperties)",
+        orderBy: "createdTime desc",
+        pageSize: 100,
+        pageToken,
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+      });
+
+      persistOAuthTokens(authContext);
+
+      res.json({
+        files: (response.data.files || []).map((file) => ({
+          id: file.id || "",
+          name: file.name || "Untitled recording",
+          mimeType: file.mimeType || "application/octet-stream",
+          createdTime: file.createdTime || null,
+          modifiedTime: file.modifiedTime || null,
+          size: typeof file.size === "string" ? Number(file.size) : null,
+          webViewLink: file.webViewLink || null,
+          facultyId: file.appProperties?.facultyId || null,
+        })),
+        nextPageToken: response.data.nextPageToken || null,
+        mode: activeMode,
+      });
+    } catch (err: any) {
+      console.error("Drive Recordings List Error:", err);
+      const reconnectRequired = clearExpiredOAuthTokens(activeMode, err);
+      const notConnected = (err?.message || "").includes("Google Drive is not connected");
+      res.status(notConnected ? 401 : 500).json({
+        error: err?.message || "Failed to list Drive recordings.",
+        reconnectRequired,
+      });
+    }
+  });
+
+  app.get("/api/drive/recordings/:fileId/content", async (req, res) => {
+    let activeMode: "service_account" | "oauth" | "none" = "none";
+    try {
+      const fileId = req.params.fileId?.trim();
+      if (!fileId) {
+        return res.status(400).json({ error: "Missing file ID." });
+      }
+
+      const authContext = getDriveAuthContext(req);
+      activeMode = authContext.mode;
+      const drive = google.drive({ version: "v3", auth: authContext.auth });
+      const accessToken = await getGoogleAccessToken(authContext.auth);
+      const metadata = await drive.files.get({
+        fileId,
+        fields: "id, name, mimeType, appProperties",
+        supportsAllDrives: true,
+      });
+
+      if (metadata.data.appProperties?.source !== "consultation-system") {
+        return res.status(404).json({ error: "Recording not found." });
+      }
+
+      const isDownload = getQueryString(req.query.download) === "1";
+      const upstream = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            ...(typeof req.headers.range === "string" ? { Range: req.headers.range } : {}),
+          },
+        }
+      );
+
+      if (!upstream.ok) {
+        let errorMessage = `Google Drive API returned ${upstream.status}.`;
+        const contentType = upstream.headers.get("content-type") || "";
+        if (contentType.includes("application/json")) {
+          const payload = await upstream.json().catch(() => null);
+          errorMessage = payload?.error?.message || payload?.message || errorMessage;
+        } else {
+          const text = await upstream.text();
+          if (text) errorMessage = text;
+        }
+
+        if (upstream.status === 404) {
+          return res.status(404).json({ error: "Recording not found." });
+        }
+
+        throw new Error(errorMessage);
+      }
+
+      const fileName = metadata.data.name || "recording.webm";
+      const headerNames = ["accept-ranges", "content-length", "content-range", "content-type", "etag", "last-modified"];
+      for (const headerName of headerNames) {
+        const headerValue = upstream.headers.get(headerName);
+        if (headerValue) {
+          res.setHeader(headerName, headerValue);
+        }
+      }
+
+      res.setHeader(
+        "Content-Disposition",
+        `${isDownload ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(fileName)}`
+      );
+
+      persistOAuthTokens(authContext);
+
+      if (!upstream.body) {
+        throw new Error("Google Drive did not return recording content.");
+      }
+
+      res.status(upstream.status);
+      const stream = Readable.fromWeb(upstream.body as any);
+      stream.on("error", (streamErr) => {
+        console.error("Drive Recording Stream Error:", streamErr);
+        res.destroy(streamErr instanceof Error ? streamErr : undefined);
+      });
+      stream.pipe(res);
+    } catch (err: any) {
+      console.error("Drive Recording Content Error:", err);
+      const reconnectRequired = clearExpiredOAuthTokens(activeMode, err);
+      const notConnected = (err?.message || "").includes("Google Drive is not connected");
+
+      if (res.headersSent) {
+        res.end();
+        return;
+      }
+
+      res.status(notConnected ? 401 : 500).json({
+        error: err?.message || "Failed to load Drive recording.",
+        reconnectRequired,
+      });
+    }
+  });
+
   app.post("/api/drive/disconnect", (_req, res) => {
     try {
       if (fs.existsSync(TOKEN_PATH)) {
@@ -1795,9 +1944,18 @@ async function startServer() {
           ? getServiceAccountCredentialsFromEnv()?.client_email || null
           : null;
       
+      const facultyId =
+        typeof req.body?.faculty_id === "string"
+          ? req.body.faculty_id.trim()
+          : typeof req.body?.faculty_id === "number"
+            ? String(req.body.faculty_id)
+            : Array.isArray(req.body?.faculty_id)
+              ? String(req.body.faculty_id[0] || "").trim()
+              : "";
+
       const fileMetadata: {
         name: string;
-        appProperties: { source: string };
+        appProperties: Record<string, string>;
         parents?: string[];
       } = {
         name: file.originalname,
@@ -1805,6 +1963,9 @@ async function startServer() {
           source: 'consultation-system'
         }
       };
+      if (facultyId) {
+        fileMetadata.appProperties.facultyId = facultyId;
+      }
       const driveFolderId = unwrapEnvValue(process.env.GOOGLE_DRIVE_FOLDER_ID);
       if (driveFolderId) {
         fileMetadata.parents = [driveFolderId];
@@ -1877,9 +2038,7 @@ async function startServer() {
         ? "Service account is uploading outside an accessible shared folder/drive. Ensure GOOGLE_DRIVE_FOLDER_ID points to a folder shared with the service account, or switch to OAuth mode."
         : null;
       const configurationError = folderNotFound || noQuotaForServiceAccount;
-      if (activeMode === "oauth" && (err?.message || "").includes("invalid_grant") && fs.existsSync(TOKEN_PATH)) {
-        fs.unlinkSync(TOKEN_PATH);
-      }
+      clearExpiredOAuthTokens(activeMode, err);
       // Clean up local file if it exists
       if (req.file && fs.existsSync(req.file.path)) {
         fs.unlinkSync(req.file.path);

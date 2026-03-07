@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Shield, LogOut, Plus, Building, UserPlus, ArrowLeft, Trash2, KeyRound, AlertTriangle, Users } from "lucide-react";
+import { Shield, LogOut, Plus, Building, UserPlus, ArrowLeft, Trash2, KeyRound, AlertTriangle, Users, FolderOpen, RefreshCw, Search, FileAudio, ExternalLink, Download } from "lucide-react";
 
 interface LiveQueueItem {
   id: number;
@@ -12,6 +12,17 @@ interface LiveQueueItem {
   student_number: string;
   time_period?: string | null;
   meet_link?: string | null;
+}
+
+interface DriveRecording {
+  id: string;
+  name: string;
+  mimeType: string;
+  createdTime: string | null;
+  modifiedTime: string | null;
+  size: number | null;
+  webViewLink: string | null;
+  facultyId: string | null;
 }
 
 export default function AdminDashboard() {
@@ -82,6 +93,12 @@ export default function AdminDashboard() {
   const [tokenMaxAgeDays, setTokenMaxAgeDays] = useState(30);
   const [liveQueue, setLiveQueue] = useState<LiveQueueItem[]>([]);
   const [liveQueueLoading, setLiveQueueLoading] = useState(false);
+  const [driveRecordings, setDriveRecordings] = useState<DriveRecording[]>([]);
+  const [driveRecordingsLoading, setDriveRecordingsLoading] = useState(false);
+  const [driveRecordingsError, setDriveRecordingsError] = useState("");
+  const [driveRecordingsNextPageToken, setDriveRecordingsNextPageToken] = useState<string | null>(null);
+  const [driveRecordingsSearch, setDriveRecordingsSearch] = useState("");
+  const [selectedRecordingId, setSelectedRecordingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (localStorage.getItem("user_role") !== "admin") {
@@ -138,6 +155,20 @@ export default function AdminDashboard() {
     };
   }, []);
 
+  useEffect(() => {
+    if (localStorage.getItem("user_role") !== "admin") return;
+
+    if (!driveConnected) {
+      setDriveRecordings([]);
+      setDriveRecordingsError("");
+      setDriveRecordingsNextPageToken(null);
+      setSelectedRecordingId(null);
+      return;
+    }
+
+    void fetchDriveRecordings();
+  }, [driveConnected]);
+
   const checkDriveStatus = async () => {
     try {
       const res = await fetch(`/api/drive/status`);
@@ -152,6 +183,39 @@ export default function AdminDashboard() {
       setTokenMaxAgeDays(typeof data.tokenMaxAgeDays === "number" ? data.tokenMaxAgeDays : 30);
     } catch (err) {
       console.error("Failed to check drive status", err);
+    }
+  };
+
+  const fetchDriveRecordings = async (loadMore = false) => {
+    const pageToken = loadMore ? driveRecordingsNextPageToken : null;
+    if (loadMore && !pageToken) return;
+
+    setDriveRecordingsLoading(true);
+    setDriveRecordingsError("");
+
+    try {
+      const query = pageToken ? `?pageToken=${encodeURIComponent(pageToken)}` : "";
+      const res = await fetch(`/api/drive/recordings${query}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to load Drive recordings.");
+      }
+
+      const files = Array.isArray(data.files) ? (data.files as DriveRecording[]) : [];
+      setDriveRecordings((current) => (loadMore ? [...current, ...files] : files));
+      setDriveRecordingsNextPageToken(typeof data.nextPageToken === "string" ? data.nextPageToken : null);
+      setSelectedRecordingId((current) => {
+        const mergedFiles = loadMore ? [...driveRecordings, ...files] : files;
+        if (current && mergedFiles.some((item) => item.id === current)) {
+          return current;
+        }
+        return mergedFiles[0]?.id || null;
+      });
+    } catch (err) {
+      console.error("Failed to fetch Drive recordings", err);
+      setDriveRecordingsError(err instanceof Error ? err.message : "Failed to load Drive recordings.");
+    } finally {
+      setDriveRecordingsLoading(false);
     }
   };
 
@@ -766,10 +830,62 @@ export default function AdminDashboard() {
     }
   };
 
+  const getFacultyNameForRecording = (recording: DriveRecording) => {
+    if (!recording.facultyId) return "Unknown faculty";
+    const matchedFaculty = faculties.find((item: any) => String(item.id) === String(recording.facultyId));
+    return matchedFaculty?.name || `Faculty ${recording.facultyId}`;
+  };
+
+  const formatRecordingDate = (value: string | null) => {
+    if (!value) return "Unknown upload date";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return "Unknown upload date";
+    return parsed.toLocaleString([], {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  };
+
+  const formatRecordingSize = (value: number | null) => {
+    if (value === null || Number.isNaN(value)) return "Unknown size";
+    if (value < 1024) return `${value} B`;
+
+    const units = ["KB", "MB", "GB"];
+    let size = value / 1024;
+    let unitIndex = 0;
+
+    while (size >= 1024 && unitIndex < units.length - 1) {
+      size /= 1024;
+      unitIndex += 1;
+    }
+
+    return `${size.toFixed(size >= 10 ? 0 : 1)} ${units[unitIndex]}`;
+  };
+
   const servingStudents = liveQueue.filter((item) => item.status === "serving");
   const nextStudents = liveQueue.filter((item) => item.status === "next");
   const waitingStudents = liveQueue.filter((item) => item.status === "waiting");
   const filteredDepartments = departments.filter((d: any) => String(d.college_id) === String(facCollege));
+
+  const normalizedDriveSearch = driveRecordingsSearch.trim().toLowerCase();
+  const filteredDriveRecordings = driveRecordings.filter((recording) => {
+    if (!normalizedDriveSearch) return true;
+    const facultyName = getFacultyNameForRecording(recording).toLowerCase();
+    return (
+      recording.name.toLowerCase().includes(normalizedDriveSearch) ||
+      facultyName.includes(normalizedDriveSearch)
+    );
+  });
+  const selectedRecording =
+    filteredDriveRecordings.find((recording) => recording.id === selectedRecordingId) ||
+    filteredDriveRecordings[0] ||
+    null;
+  const selectedRecordingContentUrl = selectedRecording
+    ? `/api/drive/recordings/${encodeURIComponent(selectedRecording.id)}/content`
+    : "";
 
   const departmentById = new Map<string, any>((departments || []).map((d: any) => [String(d.id), d]));
   const collegeById = new Map<string, any>((colleges || []).map((c: any) => [String(c.id), c]));
@@ -971,6 +1087,191 @@ export default function AdminDashboard() {
                 </div>
               </div>
             </div>
+          )}
+        </div>
+      </section>
+
+      <section className="px-8 pt-8 max-w-7xl mx-auto w-full">
+        <div className="bg-white rounded-3xl shadow-lg p-8 space-y-6">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-amber-100 rounded-2xl">
+                <FolderOpen className="w-6 h-6 text-amber-600" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-neutral-900">Drive Recordings</h2>
+                <p className="text-sm text-neutral-500">Browse consultation audio uploaded to Google Drive and play it without leaving the admin dashboard.</p>
+              </div>
+            </div>
+            <button
+              onClick={() => void fetchDriveRecordings()}
+              disabled={!driveConnected || driveRecordingsLoading}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-neutral-100 hover:bg-neutral-200 disabled:bg-neutral-100 disabled:text-neutral-400 text-neutral-700 rounded-xl transition-colors"
+            >
+              <RefreshCw className={`w-4 h-4 ${driveRecordingsLoading ? "animate-spin" : ""}`} />
+              Refresh Recordings
+            </button>
+          </div>
+
+          {!driveConnected ? (
+            <div className="p-6 rounded-2xl bg-neutral-50 text-neutral-500 text-sm border border-neutral-200">
+              Connect Google Drive first. Once Drive is connected, uploaded consultation audio will appear here automatically.
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-col lg:flex-row gap-3">
+                <label className="relative flex-1">
+                  <Search className="w-4 h-4 text-neutral-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={driveRecordingsSearch}
+                    onChange={(e) => setDriveRecordingsSearch(e.target.value)}
+                    placeholder="Search recordings by file name or faculty"
+                    className="w-full pl-11 pr-4 py-3 border border-neutral-200 rounded-2xl bg-neutral-50 focus:border-amber-500 focus:ring-0 outline-none transition-colors"
+                  />
+                </label>
+                <div className="px-4 py-3 rounded-2xl bg-neutral-50 border border-neutral-200 text-sm text-neutral-600">
+                  Showing {filteredDriveRecordings.length} of {driveRecordings.length} recordings
+                </div>
+              </div>
+
+              {driveRecordingsError ? (
+                <div className="p-4 rounded-2xl bg-red-50 text-red-700 text-sm border border-red-100">
+                  {driveRecordingsError}
+                </div>
+              ) : null}
+
+              {driveRecordingsLoading && driveRecordings.length === 0 ? (
+                <div className="p-6 rounded-2xl bg-neutral-50 text-neutral-500 text-sm border border-neutral-200">
+                  Loading Drive recordings...
+                </div>
+              ) : filteredDriveRecordings.length === 0 ? (
+                <div className="p-6 rounded-2xl bg-neutral-50 text-neutral-500 text-sm border border-neutral-200">
+                  {driveRecordings.length === 0 ? "No consultation recordings have been uploaded yet." : "No recordings match your search."}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.85fr)] gap-6">
+                  <div className="rounded-3xl border border-neutral-200 overflow-hidden bg-neutral-50">
+                    <div className="px-5 py-4 border-b border-neutral-200 bg-white">
+                      <h3 className="text-sm font-bold text-neutral-700 uppercase tracking-wider">Recording Library</h3>
+                    </div>
+                    <div className="max-h-[32rem] overflow-y-auto">
+                      {filteredDriveRecordings.map((recording) => {
+                        const isSelected = selectedRecording?.id === recording.id;
+
+                        return (
+                          <button
+                            key={recording.id}
+                            type="button"
+                            onClick={() => setSelectedRecordingId(recording.id)}
+                            className={`w-full text-left px-5 py-4 border-b border-neutral-200 last:border-b-0 transition-colors ${
+                              isSelected ? "bg-amber-50" : "bg-white hover:bg-neutral-50"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-3">
+                                  <div className={`p-2 rounded-xl ${isSelected ? "bg-amber-100 text-amber-700" : "bg-neutral-100 text-neutral-500"}`}>
+                                    <FileAudio className="w-4 h-4" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="font-semibold text-neutral-900 truncate">{recording.name}</p>
+                                    <p className="text-sm text-neutral-500 truncate">{getFacultyNameForRecording(recording)}</p>
+                                  </div>
+                                </div>
+                                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-neutral-400">
+                                  <span>{formatRecordingDate(recording.createdTime)}</span>
+                                  <span className="text-neutral-300">•</span>
+                                  <span>{formatRecordingSize(recording.size)}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {driveRecordingsNextPageToken ? (
+                      <div className="px-5 py-4 border-t border-neutral-200 bg-white">
+                        <button
+                          type="button"
+                          onClick={() => void fetchDriveRecordings(true)}
+                          disabled={driveRecordingsLoading}
+                          className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-neutral-100 hover:bg-neutral-200 disabled:bg-neutral-100 disabled:text-neutral-400 text-neutral-700 rounded-xl transition-colors"
+                        >
+                          <RefreshCw className={`w-4 h-4 ${driveRecordingsLoading ? "animate-spin" : ""}`} />
+                          Load Older Recordings
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="rounded-3xl border border-neutral-200 bg-neutral-50 p-6 space-y-5">
+                    {selectedRecording ? (
+                      <>
+                        <div>
+                          <p className="text-sm font-bold text-neutral-700 uppercase tracking-wider">Now Playing</p>
+                          <h3 className="mt-2 text-xl font-bold text-neutral-900 break-words">{selectedRecording.name}</h3>
+                        </div>
+
+                        <div className="space-y-3 text-sm text-neutral-600">
+                          <div className="flex items-start justify-between gap-4">
+                            <span className="text-neutral-400">Faculty</span>
+                            <span className="text-right text-neutral-700">{getFacultyNameForRecording(selectedRecording)}</span>
+                          </div>
+                          <div className="flex items-start justify-between gap-4">
+                            <span className="text-neutral-400">Uploaded</span>
+                            <span className="text-right text-neutral-700">{formatRecordingDate(selectedRecording.createdTime)}</span>
+                          </div>
+                          <div className="flex items-start justify-between gap-4">
+                            <span className="text-neutral-400">Size</span>
+                            <span className="text-right text-neutral-700">{formatRecordingSize(selectedRecording.size)}</span>
+                          </div>
+                          <div className="flex items-start justify-between gap-4">
+                            <span className="text-neutral-400">Format</span>
+                            <span className="text-right text-neutral-700 break-all">{selectedRecording.mimeType || "Unknown"}</span>
+                          </div>
+                        </div>
+
+                        <audio
+                          key={selectedRecording.id}
+                          controls
+                          preload="metadata"
+                          className="w-full"
+                        >
+                          <source src={selectedRecordingContentUrl} type={selectedRecording.mimeType || "audio/webm"} />
+                          Your browser does not support the audio player.
+                        </audio>
+
+                        <div className="flex flex-wrap gap-3">
+                          <a
+                            href={`${selectedRecordingContentUrl}?download=1`}
+                            className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-colors"
+                          >
+                            <Download className="w-4 h-4" />
+                            Download
+                          </a>
+                          {selectedRecording.webViewLink ? (
+                            <a
+                              href={selectedRecording.webViewLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-neutral-100 text-neutral-700 rounded-xl border border-neutral-200 transition-colors"
+                            >
+                              <ExternalLink className="w-4 h-4" />
+                              Open in Drive
+                            </a>
+                          ) : null}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="h-full min-h-64 rounded-2xl border border-dashed border-neutral-200 bg-white flex items-center justify-center text-center text-neutral-400 text-sm px-6">
+                        Select a recording from the library to preview it here.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </section>
