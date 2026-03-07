@@ -38,6 +38,8 @@ const TOKEN_MAX_AGE_DAYS = 60;
 const OAUTH_CALLBACK_PATH = '/api/auth/google/callback';
 const LEGACY_OAUTH_CALLBACK_PATH = '/auth/callback';
 const GOOGLE_DRIVE_UPLOAD_SCOPE = "https://www.googleapis.com/auth/drive";
+const GOOGLE_MEET_CREATE_SCOPE = "https://www.googleapis.com/auth/meetings.space.created";
+const GOOGLE_OAUTH_SCOPES = [GOOGLE_DRIVE_UPLOAD_SCOPE, GOOGLE_MEET_CREATE_SCOPE];
 
 type AdminDriveAuthData = {
   tokens: any;
@@ -115,6 +117,14 @@ function getServiceAccountCredentialsFromEnv(): GoogleServiceAccountCredentials 
   }
 
   return null;
+}
+
+function getMeetDelegatedUserFromEnv() {
+  return unwrapEnvValue(
+    process.env.GOOGLE_MEET_DELEGATED_USER ||
+    process.env.GOOGLE_WORKSPACE_DELEGATED_USER ||
+    process.env.GOOGLE_DELEGATED_USER_EMAIL
+  );
 }
 
 function readAdminDriveAuthData(): AdminDriveAuthData | null {
@@ -293,15 +303,31 @@ async function startServer() {
     return normalizeOAuthRedirectUri(`http://localhost:${PORT}${OAUTH_CALLBACK_PATH}`);
   };
 
+  type OAuthAuthContext = { mode: "oauth"; auth: any; tokens: any; redirectUri: string };
   type DriveAuthContext =
     | { mode: "service_account"; auth: any }
-    | { mode: "oauth"; auth: any; tokens: any; redirectUri: string };
+    | OAuthAuthContext;
+  type MeetAuthContext =
+    | { mode: "service_account"; auth: any }
+    | OAuthAuthContext;
 
   const hasServiceAccountAuth = () => !!getServiceAccountCredentialsFromEnv();
+  const hasMeetServiceAccountAuth = () => !!(getServiceAccountCredentialsFromEnv() && getMeetDelegatedUserFromEnv());
+  const getStoredOAuthScopes = () => {
+    const rawScopes = getAdminTokens()?.scope;
+    return typeof rawScopes === "string" ? rawScopes.split(/\s+/).filter(Boolean) : [];
+  };
+  const hasOAuthScope = (scope: string) => getStoredOAuthScopes().includes(scope);
 
   const getDriveConnectionMode = (): "service_account" | "oauth" | "none" => {
     if (hasServiceAccountAuth()) return "service_account";
     if (getAdminTokens()) return "oauth";
+    return "none";
+  };
+
+  const getMeetConnectionMode = (): "service_account" | "oauth" | "none" => {
+    if (hasMeetServiceAccountAuth()) return "service_account";
+    if (hasOAuthScope(GOOGLE_MEET_CREATE_SCOPE)) return "oauth";
     return "none";
   };
 
@@ -332,12 +358,109 @@ async function startServer() {
     };
   };
 
-  const persistOAuthTokens = (context: DriveAuthContext) => {
+  const getMeetAuthContext = (req?: express.Request): MeetAuthContext => {
+    const serviceAccountCredentials = getServiceAccountCredentialsFromEnv();
+    const delegatedUser = getMeetDelegatedUserFromEnv();
+
+    if (serviceAccountCredentials && delegatedUser) {
+      const auth = new google.auth.JWT({
+        email: serviceAccountCredentials.client_email,
+        key: serviceAccountCredentials.private_key,
+        scopes: [GOOGLE_MEET_CREATE_SCOPE],
+        subject: delegatedUser,
+      });
+      return { mode: "service_account", auth };
+    }
+
+    const tokens = getAdminTokens();
+    if (!tokens) {
+      throw new Error(
+        "Google Meet is not connected. Reconnect Google in the Admin Dashboard, or configure GOOGLE_MEET_DELEGATED_USER for service-account impersonation."
+      );
+    }
+
+    const redirectUri = getAdminRedirectUri() || resolveOAuthRedirectUri(req);
+    const oauth2Client = getOAuth2Client(redirectUri);
+    oauth2Client.setCredentials(tokens);
+
+    return {
+      mode: "oauth",
+      auth: oauth2Client,
+      tokens,
+      redirectUri,
+    };
+  };
+
+  const persistOAuthTokens = (context: DriveAuthContext | MeetAuthContext) => {
     if (context.mode !== "oauth") return;
 
     const mergedTokens = { ...context.tokens, ...context.auth.credentials };
     if (mergedTokens.refresh_token || context.tokens.refresh_token) {
       saveAdminTokens(mergedTokens, context.redirectUri);
+    }
+  };
+
+  const getGoogleAccessToken = async (authClient: any) => {
+    const accessToken = await authClient.getAccessToken();
+    const tokenValue =
+      typeof accessToken === "string"
+        ? accessToken
+        : typeof accessToken?.token === "string"
+          ? accessToken.token
+          : "";
+
+    if (!tokenValue) {
+      throw new Error("Failed to retrieve a Google access token.");
+    }
+
+    return tokenValue;
+  };
+
+  const createGoogleMeetLink = async (req?: express.Request) => {
+    let authContext: MeetAuthContext | null = null;
+
+    try {
+      authContext = getMeetAuthContext(req);
+      const accessToken = await getGoogleAccessToken(authContext.auth);
+      const response = await fetch("https://meet.googleapis.com/v2/spaces", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}),
+      });
+
+      if (!response.ok) {
+        let errorMessage = `Google Meet API returned ${response.status}.`;
+        try {
+          const payload = await response.json();
+          errorMessage = payload?.error?.message || payload?.message || errorMessage;
+        } catch {
+          const fallbackText = await response.text();
+          if (fallbackText) errorMessage = fallbackText;
+        }
+
+        const lowered = errorMessage.toLowerCase();
+        if (response.status === 401 || response.status === 403 || lowered.includes("insufficient") || lowered.includes("scope")) {
+          throw new Error("Google Meet access is not authorized. Reconnect Google in the Admin Dashboard to grant Meet permissions.");
+        }
+
+        throw new Error(errorMessage);
+      }
+
+      const payload = await response.json();
+      if (typeof payload?.meetingUri !== "string" || !payload.meetingUri.trim()) {
+        throw new Error("Google Meet API did not return a meeting link.");
+      }
+
+      persistOAuthTokens(authContext);
+      return payload.meetingUri.trim();
+    } catch (err) {
+      if (authContext) {
+        persistOAuthTokens(authContext);
+      }
+      throw err;
     }
   };
 
@@ -825,7 +948,17 @@ async function startServer() {
       }
 
       const targetEmail = student_email || student?.email;
-      const meetLinkToSave = time_period ? `${time_period}|` : null;
+      let autoGeneratedMeetLink: string | null = null;
+
+      try {
+        autoGeneratedMeetLink = await createGoogleMeetLink(req);
+      } catch (err) {
+        console.warn("[Queue Join] Failed to auto-create Google Meet link:", err);
+      }
+
+      const meetLinkToSave = time_period
+        ? `${time_period}|${autoGeneratedMeetLink || ""}`
+        : autoGeneratedMeetLink;
 
       const queueInsertBase = {
         student_id: student.id,
@@ -889,7 +1022,11 @@ async function startServer() {
           <p>Hi ${formatted.student_name || 'Student'},</p>
           <p>You have successfully joined the queue for a consultation with <strong>${formatted.faculty_name || 'your selected faculty'}</strong>.</p>
           ${time_period ? `<p><strong>Time Slot:</strong> ${time_period}</p>` : ''}
-          <p><strong>Virtual Consultation Room:</strong> The faculty will provide the Google Meet link when it is your turn.</p>
+          <p><strong>Virtual Consultation Room:</strong> ${
+            autoGeneratedMeetLink
+              ? "A Google Meet link has been reserved for your consultation and will appear when it is your turn."
+              : "The faculty will provide the Google Meet link when it is your turn."
+          }</p>
           <p>Please keep this email. You can track your status on the kiosk or wait for further notifications.</p>
           <br/>
           <p>Thank you!</p>
@@ -1405,12 +1542,12 @@ async function startServer() {
 
   app.get("/api/auth/google/url", (req, res) => {
     try {
-      if (hasServiceAccountAuth()) {
+      if (hasServiceAccountAuth() && hasMeetServiceAccountAuth()) {
         return res.json({
           url: null,
           redirectUri: null,
           mode: "service_account",
-          message: "Service account mode is enabled. Admin OAuth is not required."
+          message: "Service account mode is enabled for Google Drive and Google Meet. Admin OAuth is not required."
         });
       }
 
@@ -1423,7 +1560,7 @@ async function startServer() {
       
       const url = oauth2Client.generateAuthUrl({
         access_type: 'offline',
-        scope: [GOOGLE_DRIVE_UPLOAD_SCOPE],
+        scope: GOOGLE_OAUTH_SCOPES,
         state: stateString,
         prompt: 'consent'
       });
@@ -1438,10 +1575,10 @@ async function startServer() {
     const code = getQueryString(req.query.code);
     const state = getQueryString(req.query.state);
     try {
-      if (hasServiceAccountAuth()) {
+      if (hasServiceAccountAuth() && hasMeetServiceAccountAuth()) {
         return res
           .status(400)
-          .send("Service account mode is enabled. OAuth callback is not used.");
+          .send("Service account mode is enabled for Google Drive and Google Meet. OAuth callback is not used.");
       }
 
       if (!code) throw new Error("Missing code parameter");
@@ -1498,24 +1635,36 @@ async function startServer() {
     }
   });
 
-  app.get("/api/drive/status", (req, res) => {
-    const mode = getDriveConnectionMode();
-    res.json({ connected: mode !== "none", mode });
+  app.get("/api/drive/status", (_req, res) => {
+    const driveMode = getDriveConnectionMode();
+    const meetMode = getMeetConnectionMode();
+    const oauthConnected = !!getAdminTokens();
+
+    res.json({
+      connected: driveMode !== "none",
+      mode: driveMode,
+      driveConnected: driveMode !== "none",
+      driveMode,
+      meetConnected: meetMode !== "none",
+      meetMode,
+      oauthConnected,
+    });
   });
 
-  app.post("/api/drive/disconnect", (req, res) => {
+  app.post("/api/drive/disconnect", (_req, res) => {
     try {
+      if (fs.existsSync(TOKEN_PATH)) {
+        fs.unlinkSync(TOKEN_PATH);
+      }
+
       if (hasServiceAccountAuth()) {
         return res.json({
           success: true,
           mode: "service_account",
-          message: "Service account mode is controlled by environment variables."
+          message: "Stored OAuth tokens were removed. Service account mode remains controlled by environment variables."
         });
       }
 
-      if (fs.existsSync(TOKEN_PATH)) {
-        fs.unlinkSync(TOKEN_PATH);
-      }
       res.json({ success: true, mode: "oauth" });
     } catch (err: any) {
       console.error("Drive Disconnect Error:", err);

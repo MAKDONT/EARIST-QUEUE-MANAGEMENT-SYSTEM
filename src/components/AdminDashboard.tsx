@@ -74,6 +74,9 @@ export default function AdminDashboard() {
 
   const [driveConnected, setDriveConnected] = useState(false);
   const [driveMode, setDriveMode] = useState<"service_account" | "oauth" | "none">("none");
+  const [meetConnected, setMeetConnected] = useState(false);
+  const [meetMode, setMeetMode] = useState<"service_account" | "oauth" | "none">("none");
+  const [oauthConnected, setOauthConnected] = useState(false);
   const [liveQueue, setLiveQueue] = useState<LiveQueueItem[]>([]);
   const [liveQueueLoading, setLiveQueueLoading] = useState(false);
 
@@ -92,8 +95,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
-        setDriveConnected(true);
-        setDriveMode("oauth");
+        void checkDriveStatus();
       } else if (event.data?.type === 'OAUTH_AUTH_ERROR') {
         alert(`Google OAuth failed: ${event.data?.error}\n${event.data?.description || ''}`);
       }
@@ -137,8 +139,11 @@ export default function AdminDashboard() {
     try {
       const res = await fetch(`/api/drive/status`);
       const data = await res.json();
-      setDriveConnected(data.connected);
-      setDriveMode(data.mode || "none");
+      setDriveConnected(data.driveConnected ?? data.connected);
+      setDriveMode(data.driveMode || data.mode || "none");
+      setMeetConnected(Boolean(data.meetConnected));
+      setMeetMode(data.meetMode || "none");
+      setOauthConnected(Boolean(data.oauthConnected));
     } catch (err) {
       console.error("Failed to check drive status", err);
     }
@@ -234,8 +239,8 @@ export default function AdminDashboard() {
 
       if (!url) {
         if (mode === "service_account") {
-          setDriveConnected(true);
-          alert(message || "Server-side Google Drive service account is already active.");
+          void checkDriveStatus();
+          alert(message || "Server-side Google integration is already active.");
           return;
         }
         throw new Error(message || "No OAuth URL returned.");
@@ -247,26 +252,29 @@ export default function AdminDashboard() {
       }
     } catch (error) {
       console.error('OAuth error:', error);
-      alert('Failed to initiate Google Drive connection.');
+      alert('Failed to initiate Google connection.');
     }
   };
 
   const handleDisconnectDrive = async () => {
-    if (driveMode === "service_account") {
-      alert("Drive is connected using server-side service account credentials. Remove the service account env vars to disable it.");
+    if (!oauthConnected) {
+      if (driveMode === "service_account") {
+        alert("Server-side Google integration is managed by environment variables. There is no admin OAuth connection to disconnect.");
+      } else {
+        alert("No admin Google OAuth connection is currently stored.");
+      }
       return;
     }
-    if (!confirm("Are you sure you want to disconnect Google Drive? New recordings will not be uploaded until you reconnect.")) return;
+    if (!confirm("Are you sure you want to disconnect Google? New recordings will not upload and Meet links will not auto-generate until you reconnect.")) return;
     
     try {
       const res = await fetch("/api/drive/disconnect", { method: "POST" });
       if (!res.ok) throw new Error("Failed to disconnect");
-      setDriveConnected(false);
-      setDriveMode("none");
-      alert("Google Drive disconnected successfully.");
+      await checkDriveStatus();
+      alert("Google OAuth disconnected successfully.");
     } catch (err) {
       console.error("Failed to disconnect drive", err);
-      alert("Failed to disconnect Google Drive.");
+      alert("Failed to disconnect Google.");
     }
   };
 
@@ -786,14 +794,35 @@ export default function AdminDashboard() {
                     <path d="M12 4.5L2.2 21.5H12L21.8 4.5H12Z" fill="#FFBA00"/>
                   </svg>
                   <span className="text-sm font-medium">
-                    {driveMode === "service_account" ? "Drive Connected (Server)" : "Drive Connected"}
+                    {driveMode === "service_account" ? "Drive Connected (Server)" : "Google Connected"}
                   </span>
                 </div>
-                {driveMode === "oauth" ? (
+                <span
+                  className={`px-3 py-1.5 text-sm font-medium rounded-lg border ${
+                    meetConnected
+                      ? "bg-blue-50 text-blue-700 border-blue-100"
+                      : "bg-amber-50 text-amber-700 border-amber-100"
+                  }`}
+                >
+                  {meetConnected
+                    ? meetMode === "service_account"
+                      ? "Meet Auto-Links (Server)"
+                      : "Meet Auto-Links Ready"
+                    : "Meet Auto-Links Off"}
+                </span>
+                {!meetConnected ? (
+                  <button
+                    onClick={handleConnectDrive}
+                    className="px-3 py-1.5 bg-white hover:bg-neutral-50 text-neutral-600 text-sm font-medium rounded-lg border border-neutral-200 transition-colors"
+                    title="Enable Google Meet auto-links"
+                  >
+                    Enable Meet Links
+                  </button>
+                ) : oauthConnected ? (
                   <button
                     onClick={handleDisconnectDrive}
                     className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-sm font-medium rounded-lg border border-red-100 transition-colors"
-                    title="Disconnect Google Drive"
+                    title="Disconnect Google OAuth"
                   >
                     Disconnect
                   </button>
@@ -814,7 +843,7 @@ export default function AdminDashboard() {
                   <path d="M12 4.5L7.1 13H16.9L12 4.5Z" fill="#EA4335"/>
                   <path d="M12 4.5L2.2 21.5H12L21.8 4.5H12Z" fill="#FFBA00"/>
                 </svg>
-                <span className="text-sm font-medium">Connect Drive</span>
+                <span className="text-sm font-medium">Connect Google</span>
               </button>
             )}
           </div>

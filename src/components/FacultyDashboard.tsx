@@ -25,7 +25,7 @@ export default function FacultyDashboard() {
   const navigate = useNavigate();
   const [faculty, setFaculty] = useState<Faculty[]>([]);
   const [queue, setQueue] = useState<Consultation[]>([]);
-  const [meetLink, setMeetLink] = useState(() => localStorage.getItem("faculty_meet_link") || "");
+  const [meetLinksByConsultation, setMeetLinksByConsultation] = useState<Record<number, string>>({});
   const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
   const [availabilitySlots, setAvailabilitySlots] = useState<{day: string, start: string, end: string}[]>([]);
 
@@ -57,6 +57,22 @@ export default function FacultyDashboard() {
       return () => ws.close();
     }
   }, [selectedFaculty]);
+
+  useEffect(() => {
+    setMeetLinksByConsultation((current) => {
+      const next: Record<number, string> = {};
+
+      for (const consultation of queue) {
+        if (consultation.meet_link) {
+          next[consultation.id] = consultation.meet_link;
+        } else if (current[consultation.id]) {
+          next[consultation.id] = current[consultation.id];
+        }
+      }
+
+      return next;
+    });
+  }, [queue]);
 
   const fetchFaculty = async (retries = 3) => {
     try {
@@ -185,6 +201,25 @@ export default function FacultyDashboard() {
     }
   };
 
+  const normalizeMeetLink = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return "";
+    return trimmed.startsWith("http") ? trimmed : `https://${trimmed}`;
+  };
+
+  const isMeetLinkAlreadyAssigned = (consultationId: number, candidateLink: string) => {
+    const normalizedCandidate = normalizeMeetLink(candidateLink).toLowerCase();
+    if (!normalizedCandidate) return false;
+
+    return queue.some((consultation) => {
+      if (consultation.id === consultationId || !consultation.meet_link) {
+        return false;
+      }
+
+      return normalizeMeetLink(consultation.meet_link).toLowerCase() === normalizedCandidate;
+    });
+  };
+
   const updateStatus = async (id: number, status: string, link?: string, autoCallNext: boolean = false) => {
     try {
       const res = await fetch(`/api/queue/${id}/status`, {
@@ -225,18 +260,24 @@ export default function FacultyDashboard() {
   };
 
   const handleStartSession = async (id: number, existingLink?: string) => {
-    let finalLink = existingLink || meetLink;
+    let finalLink = existingLink || meetLinksByConsultation[id]?.trim() || "";
     
     if (!finalLink) {
       alert("Please provide your Google Meet link before starting the consultation.");
       return;
     }
-    
-    if (!finalLink.startsWith("http")) {
-      finalLink = "https://" + finalLink;
+
+    finalLink = normalizeMeetLink(finalLink);
+
+    if (isMeetLinkAlreadyAssigned(id, finalLink)) {
+      alert("This Google Meet link is already assigned to another student. Please use a different link.");
+      return;
     }
 
-    localStorage.setItem("faculty_meet_link", finalLink);
+    setMeetLinksByConsultation((current) => ({
+      ...current,
+      [id]: finalLink,
+    }));
     
     window.open(finalLink, '_blank');
     
@@ -385,12 +426,6 @@ export default function FacultyDashboard() {
                   >
                     <CheckCircle className="w-4 h-4" /> Complete
                   </button>
-                  <button
-                    onClick={() => updateStatus(activeSession.id, "cancelled", undefined, true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-800 font-medium rounded-xl transition-colors"
-                  >
-                    <XCircle className="w-4 h-4" /> Cancel
-                  </button>
                 </div>
               </div>
               
@@ -488,8 +523,11 @@ export default function FacultyDashboard() {
                           <input
                             type="text"
                             placeholder="Paste Google Meet Link"
-                            value={meetLink}
-                            onChange={(e) => setMeetLink(e.target.value)}
+                            value={meetLinksByConsultation[student.id] || ""}
+                            onChange={(e) => setMeetLinksByConsultation((current) => ({
+                              ...current,
+                              [student.id]: e.target.value,
+                            }))}
                             className="px-4 py-3 sm:py-2 border border-neutral-300 rounded-xl text-sm w-full sm:w-64 focus:ring-2 focus:ring-indigo-500 outline-none"
                           />
                         )}
@@ -507,13 +545,6 @@ export default function FacultyDashboard() {
                           >
                             <CheckCircle className="w-5 h-5" />
                           </button>
-                          <button
-                            onClick={() => updateStatus(student.id, "cancelled", undefined, true)}
-                            className="flex items-center justify-center p-3 sm:p-2 bg-red-100 hover:bg-red-200 text-red-800 rounded-xl transition-colors shrink-0"
-                            title="Cancel Consultation"
-                          >
-                            <XCircle className="w-5 h-5" />
-                          </button>
                         </div>
                       </div>
                     )}
@@ -525,12 +556,6 @@ export default function FacultyDashboard() {
                           className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-3 sm:py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-xl transition-colors shadow-sm"
                         >
                           <CheckCircle className="w-4 h-4" /> Complete
-                        </button>
-                        <button
-                          onClick={() => updateStatus(student.id, "cancelled", undefined, true)}
-                          className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-3 sm:py-2 bg-red-100 hover:bg-red-200 text-red-800 font-medium rounded-xl transition-colors"
-                        >
-                          <XCircle className="w-4 h-4" /> Cancel
                         </button>
                       </div>
                     )}
