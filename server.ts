@@ -256,6 +256,35 @@ async function startServer() {
     }
     return null;
   };
+  const getBodyString = (value: unknown): string => {
+    const stringValue = getQueryString(value);
+    return stringValue ? stringValue.trim() : "";
+  };
+  const sanitizeDriveFileNamePart = (value: string, fallback: string) => {
+    const normalized = value
+      .normalize("NFKD")
+      .replace(/[^\x00-\x7F]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+
+    return (normalized || fallback).slice(0, 48);
+  };
+  const buildDriveRecordingFileName = (params: {
+    uploadedAt: string;
+    facultyName?: string | null;
+    studentName?: string | null;
+    studentNumber?: string | null;
+  }) => {
+    const timestampPart = params.uploadedAt.replace(/:/g, "-");
+    const facultyPart = sanitizeDriveFileNamePart(params.facultyName || "", "faculty");
+    const studentBase = params.studentNumber
+      ? `${params.studentNumber}-${params.studentName || ""}`
+      : params.studentName || "";
+    const studentPart = sanitizeDriveFileNamePart(studentBase, "student");
+
+    return `consultation-audio-${timestampPart}-${facultyPart}-${studentPart}.webm`;
+  };
   const normalizeOAuthRedirectUri = (value: string) => {
     const trimmed = value.trim();
     const cleaned =
@@ -1784,19 +1813,111 @@ async function startServer() {
         includeItemsFromAllDrives: true,
       });
 
+      const files = response.data.files || [];
+      const consultationIds = Array.from(
+        new Set(
+          files
+            .map((file) => file.appProperties?.consultationId || "")
+            .filter(Boolean)
+        )
+      );
+
+      const consultationResult = consultationIds.length
+        ? await getSupabase()
+            .from("queue")
+            .select("id, faculty_id, student_id")
+            .in("id", consultationIds)
+        : { data: [], error: null as any };
+
+      if (consultationResult.error) {
+        throw consultationResult.error;
+      }
+
+      const consultationById = new Map<string, { faculty_id: string | null; student_id: string | null }>(
+        (consultationResult.data || []).map((item: any) => [
+          String(item.id),
+          {
+            faculty_id: item.faculty_id || null,
+            student_id: item.student_id || null,
+          },
+        ])
+      );
+
+      const facultyIds = Array.from(
+        new Set(
+          files
+            .map((file) => file.appProperties?.facultyId || consultationById.get(file.appProperties?.consultationId || "")?.faculty_id || "")
+            .filter(Boolean)
+        )
+      );
+      const studentIds = Array.from(
+        new Set(
+          files
+            .map((file) => file.appProperties?.studentId || consultationById.get(file.appProperties?.consultationId || "")?.student_id || "")
+            .filter(Boolean)
+        )
+      );
+
+      const [facultyResult, studentResult] = await Promise.all([
+        facultyIds.length
+          ? getSupabase().from("faculty").select("id, name").in("id", facultyIds)
+          : Promise.resolve({ data: [], error: null as any }),
+        studentIds.length
+          ? getSupabase().from("students").select("id, full_name, student_number").in("id", studentIds)
+          : Promise.resolve({ data: [], error: null as any }),
+      ]);
+
+      if (facultyResult.error) {
+        throw facultyResult.error;
+      }
+      if (studentResult.error) {
+        throw studentResult.error;
+      }
+
+      const facultyNameById = new Map<string, string>(
+        (facultyResult.data || []).map((item: any) => [String(item.id), item.name || ""])
+      );
+      const studentById = new Map<string, { name: string | null; studentNumber: string | null }>(
+        (studentResult.data || []).map((item: any) => [
+          String(item.id),
+          {
+            name: item.full_name || null,
+            studentNumber: item.student_number || null,
+          },
+        ])
+      );
+
       persistOAuthTokens(authContext);
 
       res.json({
-        files: (response.data.files || []).map((file) => ({
-          id: file.id || "",
-          name: file.name || "Untitled recording",
-          mimeType: file.mimeType || "application/octet-stream",
-          createdTime: file.createdTime || null,
-          modifiedTime: file.modifiedTime || null,
-          size: typeof file.size === "string" ? Number(file.size) : null,
-          webViewLink: file.webViewLink || null,
-          facultyId: file.appProperties?.facultyId || null,
-        })),
+        files: files.map((file) => {
+          const consultationId = file.appProperties?.consultationId || null;
+          const resolvedFacultyId =
+            file.appProperties?.facultyId ||
+            consultationById.get(consultationId || "")?.faculty_id ||
+            null;
+          const resolvedStudentId =
+            file.appProperties?.studentId ||
+            consultationById.get(consultationId || "")?.student_id ||
+            null;
+          const studentRecord = resolvedStudentId ? studentById.get(String(resolvedStudentId)) : null;
+
+          return {
+            id: file.id || "",
+            name: file.name || "Untitled recording",
+            mimeType: file.mimeType || "application/octet-stream",
+            createdTime: file.createdTime || null,
+            modifiedTime: file.modifiedTime || null,
+            size: typeof file.size === "string" ? Number(file.size) : null,
+            webViewLink: file.webViewLink || null,
+            consultationId,
+            facultyId: resolvedFacultyId,
+            facultyName: resolvedFacultyId ? facultyNameById.get(String(resolvedFacultyId)) || null : null,
+            studentId: resolvedStudentId,
+            studentName: studentRecord?.name || null,
+            studentNumber: studentRecord?.studentNumber || file.appProperties?.studentNumber || null,
+          };
+        }),
         nextPageToken: response.data.nextPageToken || null,
         mode: activeMode,
       });
@@ -1944,27 +2065,101 @@ async function startServer() {
           ? getServiceAccountCredentialsFromEnv()?.client_email || null
           : null;
       
-      const facultyId =
-        typeof req.body?.faculty_id === "string"
-          ? req.body.faculty_id.trim()
-          : typeof req.body?.faculty_id === "number"
-            ? String(req.body.faculty_id)
-            : Array.isArray(req.body?.faculty_id)
-              ? String(req.body.faculty_id[0] || "").trim()
-              : "";
+      const facultyId = getBodyString(req.body?.faculty_id);
+      const consultationId = getBodyString(req.body?.consultation_id);
+      let resolvedFacultyId = facultyId;
+      let resolvedStudentId = getBodyString(req.body?.student_id);
+      let resolvedStudentName = getBodyString(req.body?.student_name);
+      let resolvedStudentNumber = getBodyString(req.body?.student_number);
+      let resolvedFacultyName = "";
+
+      if (consultationId) {
+        const { data: consultationData, error: consultationError } = await getSupabase()
+          .from("queue")
+          .select("id, faculty_id, student_id")
+          .eq("id", consultationId)
+          .maybeSingle();
+
+        if (consultationError) {
+          throw consultationError;
+        }
+
+        if (consultationData) {
+          resolvedFacultyId = resolvedFacultyId || consultationData.faculty_id || "";
+          resolvedStudentId = resolvedStudentId || consultationData.student_id || "";
+        }
+      }
+
+      if (resolvedFacultyId) {
+        const { data: facultyData, error: facultyError } = await getSupabase()
+          .from("faculty")
+          .select("id, name")
+          .eq("id", resolvedFacultyId)
+          .maybeSingle();
+
+        if (facultyError) {
+          throw facultyError;
+        }
+
+        resolvedFacultyName = facultyData?.name || "";
+      }
+
+      if (resolvedStudentId) {
+        const { data: studentData, error: studentError } = await getSupabase()
+          .from("students")
+          .select("id, full_name, student_number")
+          .eq("id", resolvedStudentId)
+          .maybeSingle();
+
+        if (studentError) {
+          throw studentError;
+        }
+
+        if (studentData) {
+          resolvedStudentName = resolvedStudentName || studentData.full_name || "";
+          resolvedStudentNumber = resolvedStudentNumber || studentData.student_number || "";
+        }
+      }
+
+      const uploadTimestamp = new Date().toISOString();
+      const driveFileName = buildDriveRecordingFileName({
+        uploadedAt: uploadTimestamp,
+        facultyName: resolvedFacultyName || resolvedFacultyId || null,
+        studentName: resolvedStudentName || null,
+        studentNumber: resolvedStudentNumber || null,
+      });
+      const descriptionParts = [
+        resolvedFacultyName ? `Faculty: ${resolvedFacultyName}` : "",
+        resolvedStudentName ? `Student: ${resolvedStudentName}` : "",
+        resolvedStudentNumber ? `Student Number: ${resolvedStudentNumber}` : "",
+        consultationId ? `Consultation ID: ${consultationId}` : "",
+      ].filter(Boolean);
 
       const fileMetadata: {
         name: string;
+        description?: string;
         appProperties: Record<string, string>;
         parents?: string[];
       } = {
-        name: file.originalname,
+        name: driveFileName || file.originalname,
         appProperties: {
           source: 'consultation-system'
         }
       };
-      if (facultyId) {
-        fileMetadata.appProperties.facultyId = facultyId;
+      if (descriptionParts.length > 0) {
+        fileMetadata.description = descriptionParts.join(" | ");
+      }
+      if (resolvedFacultyId) {
+        fileMetadata.appProperties.facultyId = resolvedFacultyId;
+      }
+      if (consultationId) {
+        fileMetadata.appProperties.consultationId = consultationId;
+      }
+      if (resolvedStudentId) {
+        fileMetadata.appProperties.studentId = resolvedStudentId;
+      }
+      if (resolvedStudentNumber) {
+        fileMetadata.appProperties.studentNumber = resolvedStudentNumber;
       }
       const driveFolderId = unwrapEnvValue(process.env.GOOGLE_DRIVE_FOLDER_ID);
       if (driveFolderId) {
@@ -1997,7 +2192,8 @@ async function startServer() {
 
           // Fallback to account root if configured folder ID is not accessible.
           const fallbackMetadata = {
-            name: file.originalname,
+            name: fileMetadata.name,
+            ...(fileMetadata.description ? { description: fileMetadata.description } : {}),
             appProperties: fileMetadata.appProperties,
           };
           response = await drive.files.create({

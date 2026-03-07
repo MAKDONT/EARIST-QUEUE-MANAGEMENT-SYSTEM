@@ -23,6 +23,13 @@ interface Faculty {
   status: string;
 }
 
+interface RecordingContext {
+  consultationId: number;
+  studentId: string;
+  studentName: string;
+  studentNumber: string;
+}
+
 export default function FacultyDashboard() {
   const { id: selectedFaculty } = useParams();
   const navigate = useNavigate();
@@ -37,6 +44,7 @@ export default function FacultyDashboard() {
   const displayStreamRef = useRef<MediaStream | null>(null);
   const mixedAudioContextRef = useRef<AudioContext | null>(null);
   const discardRecordingOnStopRef = useRef(false);
+  const recordingContextRef = useRef<RecordingContext | null>(null);
 
   useEffect(() => {
     if (localStorage.getItem("user_role") !== "staff") {
@@ -200,7 +208,7 @@ export default function FacultyDashboard() {
     mixedAudioContextRef.current = null;
   };
 
-  const uploadToDrive = async (blob: Blob) => {
+  const uploadToDrive = async (blob: Blob, recordingContext: RecordingContext | null) => {
     const latestDriveStatus = await checkDriveStatus();
     if (latestDriveStatus === false) {
       alert("Google Drive is not connected. Recording was not uploaded.");
@@ -211,6 +219,12 @@ export default function FacultyDashboard() {
     const formData = new FormData();
     formData.append('file', blob, `consultation-audio-${new Date().toISOString().replace(/:/g, '-')}.webm`);
     formData.append('faculty_id', selectedFaculty!.toString());
+    if (recordingContext) {
+      formData.append('consultation_id', String(recordingContext.consultationId));
+      formData.append('student_id', recordingContext.studentId);
+      formData.append('student_name', recordingContext.studentName);
+      formData.append('student_number', recordingContext.studentNumber);
+    }
 
     try {
       const res = await fetch('/api/drive/upload', {
@@ -241,9 +255,10 @@ export default function FacultyDashboard() {
     }
   };
 
-  const startAudioRecording = async () => {
+  const startAudioRecording = async (recordingContext: RecordingContext | null) => {
     cleanupRecordingResources();
     discardRecordingOnStopRef.current = false;
+    recordingContextRef.current = recordingContext;
 
     try {
       let microphoneStream: MediaStream | null = null;
@@ -311,11 +326,14 @@ export default function FacultyDashboard() {
         cleanupRecordingResources();
 
         if (shouldDiscard) {
+          recordingContextRef.current = null;
           return;
         }
 
         const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
-        await uploadToDrive(blob);
+        const currentRecordingContext = recordingContextRef.current;
+        recordingContextRef.current = null;
+        await uploadToDrive(blob, currentRecordingContext);
       };
       
       recorder.start();
@@ -339,6 +357,7 @@ export default function FacultyDashboard() {
         alert("Meeting audio can only be recorded if you choose the Google Meet tab or window and enable audio sharing. This session will record the microphone only.");
       }
     } catch (err) {
+      recordingContextRef.current = null;
       cleanupRecordingResources();
       console.error("Error starting audio recording:", err);
       const message = err instanceof Error
@@ -423,6 +442,15 @@ export default function FacultyDashboard() {
   const handleStartSession = async (id: number, existingLink?: string) => {
     const draftLink = meetLinksByConsultation[id]?.trim() || "";
     let finalLink = draftLink || existingLink || "";
+    const currentConsultation = queue.find((consultation) => consultation.id === id);
+    const recordingContext = currentConsultation
+      ? {
+          consultationId: currentConsultation.id,
+          studentId: currentConsultation.student_id,
+          studentName: currentConsultation.student_name || "",
+          studentNumber: currentConsultation.student_number || "",
+        }
+      : null;
 
     if (draftLink) {
       finalLink = normalizeMeetLink(draftLink);
@@ -441,7 +469,7 @@ export default function FacultyDashboard() {
 
     try {
       if (finalLink) {
-        await startAudioRecording();
+        await startAudioRecording(recordingContext);
       }
 
       const data = await updateStatus(id, "serving", draftLink ? finalLink : undefined);
@@ -464,7 +492,7 @@ export default function FacultyDashboard() {
       }
 
       if (!finalLink) {
-        await startAudioRecording();
+        await startAudioRecording(recordingContext);
       }
       fetchQueue();
     } catch (err) {

@@ -22,7 +22,12 @@ interface DriveRecording {
   modifiedTime: string | null;
   size: number | null;
   webViewLink: string | null;
+  consultationId: string | null;
   facultyId: string | null;
+  facultyName: string | null;
+  studentId: string | null;
+  studentName: string | null;
+  studentNumber: string | null;
 }
 
 export default function AdminDashboard() {
@@ -831,9 +836,21 @@ export default function AdminDashboard() {
   };
 
   const getFacultyNameForRecording = (recording: DriveRecording) => {
+    if (recording.facultyName) return recording.facultyName;
     if (!recording.facultyId) return "Unknown faculty";
     const matchedFaculty = faculties.find((item: any) => String(item.id) === String(recording.facultyId));
     return matchedFaculty?.name || `Faculty ${recording.facultyId}`;
+  };
+
+  const getStudentNameForRecording = (recording: DriveRecording) => {
+    if (recording.studentName) return recording.studentName;
+    if (recording.studentNumber) return `Student ${recording.studentNumber}`;
+    return "Unknown student";
+  };
+
+  const getStudentDetailForRecording = (recording: DriveRecording) => {
+    const studentName = getStudentNameForRecording(recording);
+    return recording.studentNumber ? `${studentName} (${recording.studentNumber})` : studentName;
   };
 
   const formatRecordingDate = (value: string | null) => {
@@ -874,9 +891,13 @@ export default function AdminDashboard() {
   const filteredDriveRecordings = driveRecordings.filter((recording) => {
     if (!normalizedDriveSearch) return true;
     const facultyName = getFacultyNameForRecording(recording).toLowerCase();
+    const studentName = getStudentNameForRecording(recording).toLowerCase();
+    const studentNumber = (recording.studentNumber || "").toLowerCase();
     return (
       recording.name.toLowerCase().includes(normalizedDriveSearch) ||
-      facultyName.includes(normalizedDriveSearch)
+      facultyName.includes(normalizedDriveSearch) ||
+      studentName.includes(normalizedDriveSearch) ||
+      studentNumber.includes(normalizedDriveSearch)
     );
   });
   const selectedRecording =
@@ -1100,7 +1121,7 @@ export default function AdminDashboard() {
               </div>
               <div>
                 <h2 className="text-2xl font-bold text-neutral-900">Drive Recordings</h2>
-                <p className="text-sm text-neutral-500">Browse consultation audio uploaded to Google Drive and play it without leaving the admin dashboard.</p>
+                <p className="text-sm text-neutral-500">Browse consultation audio uploaded to Google Drive, including the faculty and student tied to each recording.</p>
               </div>
             </div>
             <button
@@ -1126,7 +1147,7 @@ export default function AdminDashboard() {
                     type="text"
                     value={driveRecordingsSearch}
                     onChange={(e) => setDriveRecordingsSearch(e.target.value)}
-                    placeholder="Search recordings by file name or faculty"
+                    placeholder="Search recordings by file name, faculty, or student"
                     className="w-full pl-11 pr-4 py-3 border border-neutral-200 rounded-2xl bg-neutral-50 focus:border-amber-500 focus:ring-0 outline-none transition-colors"
                   />
                 </label>
@@ -1176,12 +1197,13 @@ export default function AdminDashboard() {
                                   </div>
                                   <div className="min-w-0">
                                     <p className="font-semibold text-neutral-900 truncate">{recording.name}</p>
-                                    <p className="text-sm text-neutral-500 truncate">{getFacultyNameForRecording(recording)}</p>
+                                    <p className="text-sm text-neutral-500 truncate">Faculty: {getFacultyNameForRecording(recording)}</p>
+                                    <p className="text-sm text-neutral-500 truncate">Student: {getStudentDetailForRecording(recording)}</p>
                                   </div>
                                 </div>
                                 <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-neutral-400">
                                   <span>{formatRecordingDate(recording.createdTime)}</span>
-                                  <span className="text-neutral-300">•</span>
+                                  <span className="text-neutral-300">|</span>
                                   <span>{formatRecordingSize(recording.size)}</span>
                                 </div>
                               </div>
@@ -1217,6 +1239,18 @@ export default function AdminDashboard() {
                           <div className="flex items-start justify-between gap-4">
                             <span className="text-neutral-400">Faculty</span>
                             <span className="text-right text-neutral-700">{getFacultyNameForRecording(selectedRecording)}</span>
+                          </div>
+                          <div className="flex items-start justify-between gap-4">
+                            <span className="text-neutral-400">Student</span>
+                            <span className="text-right text-neutral-700">{getStudentNameForRecording(selectedRecording)}</span>
+                          </div>
+                          <div className="flex items-start justify-between gap-4">
+                            <span className="text-neutral-400">Student Number</span>
+                            <span className="text-right text-neutral-700">{selectedRecording.studentNumber || "Unknown"}</span>
+                          </div>
+                          <div className="flex items-start justify-between gap-4">
+                            <span className="text-neutral-400">Consultation ID</span>
+                            <span className="text-right text-neutral-700">{selectedRecording.consultationId || "Unknown"}</span>
                           </div>
                           <div className="flex items-start justify-between gap-4">
                             <span className="text-neutral-400">Uploaded</span>

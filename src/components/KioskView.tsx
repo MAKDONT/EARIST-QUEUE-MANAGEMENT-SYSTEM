@@ -11,6 +11,12 @@ interface Faculty {
   status: "available" | "busy" | "offline";
 }
 
+interface AvailabilitySlot {
+  day: string;
+  start: string;
+  end: string;
+}
+
 export default function KioskView() {
   const [faculty, setFaculty] = useState<Faculty[]>([]);
   
@@ -100,77 +106,80 @@ export default function KioskView() {
   };
 
   const getAvailabilityRange = (f: Faculty) => {
-    try {
-      const parsed = JSON.parse(f.full_name || "[]");
-      if (Array.isArray(parsed)) {
-        const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-        const todayDay = daysOfWeek[new Date().getDay()];
-        
-        const todaySlots = parsed.filter((slot: any) => slot.day === todayDay && slot.start && slot.end);
-        
-        if (todaySlots.length > 0) {
-          const formatTime = (timeStr: string) => {
-            const [h, m] = timeStr.split(':').map(Number);
-            const d = new Date();
-            d.setHours(h, m, 0, 0);
-            return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
-          };
-          
-          return todaySlots.map((s: any) => `${formatTime(s.start)} - ${formatTime(s.end)}`).join(', ');
-        }
-      }
-    } catch (e) {
-      // ignore
+    const todaySlots = getTodayAvailabilitySlots(f);
+    if (todaySlots.length === 0) {
+      return "No availability set for today";
     }
-    return "No availability set for today";
+
+    const formatTime = (timeStr: string) => {
+      const [h, m] = timeStr.split(":").map(Number);
+      const d = new Date();
+      d.setHours(h, m, 0, 0);
+      return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true });
+    };
+
+    return todaySlots.map((slot) => `${formatTime(slot.start)} - ${formatTime(slot.end)}`).join(", ");
   };
 
-  const getAvailabilitySlots = (f: Faculty) => {
+  const getTodayAvailabilitySlots = (f: Faculty): AvailabilitySlot[] => {
     try {
       const parsed = JSON.parse(f.full_name || "[]");
       if (Array.isArray(parsed)) {
-        const generatedSlots: { timeString: string, isPast: boolean }[] = [];
-        
         const daysOfWeek = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
         const todayDay = daysOfWeek[new Date().getDay()];
-        
-        parsed.forEach((slot: any) => {
-          if (!slot.start || !slot.end || slot.day !== todayDay) return;
-          
-          const [startHour, startMin] = slot.start.split(':').map(Number);
-          const [endHour, endMin] = slot.end.split(':').map(Number);
-          
-          let current = new Date();
-          current.setHours(startHour, startMin, 0, 0);
-          
-          let end = new Date();
-          end.setHours(endHour, endMin, 0, 0);
-          
-          const now = new Date();
-          
-          while (current < end) {
-            let slotStart = new Date(current);
-            let slotEnd = new Date(current.getTime() + 15 * 60000); // 15 mins
-            
-            if (slotEnd > end) break;
-            
-            const formatTime = (d: Date) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
-            
-            generatedSlots.push({
-              timeString: `${slot.day} ${formatTime(slotStart)} - ${formatTime(slotEnd)}`,
-              isPast: slotStart < now
-            });
-            
-            current = new Date(slotEnd.getTime() + 5 * 60000); // 5 mins break
-          }
+
+        return parsed.filter((slot: unknown): slot is AvailabilitySlot => {
+          if (!slot || typeof slot !== "object") return false;
+          const candidate = slot as Partial<AvailabilitySlot>;
+          return (
+            candidate.day === todayDay &&
+            typeof candidate.start === "string" &&
+            typeof candidate.end === "string" &&
+            candidate.start.length > 0 &&
+            candidate.end.length > 0
+          );
         });
-        
-        return generatedSlots;
       }
     } catch (e) {
       // ignore
     }
     return [];
+  };
+
+  const getAvailabilitySlots = (f: Faculty) => {
+    const todaySlots = getTodayAvailabilitySlots(f);
+    const generatedSlots: { timeString: string, isPast: boolean }[] = [];
+
+    todaySlots.forEach((slot) => {
+      const [startHour, startMin] = slot.start.split(":").map(Number);
+      const [endHour, endMin] = slot.end.split(":").map(Number);
+
+      let current = new Date();
+      current.setHours(startHour, startMin, 0, 0);
+
+      const end = new Date();
+      end.setHours(endHour, endMin, 0, 0);
+
+      const now = new Date();
+
+      while (current < end) {
+        const slotStart = new Date(current);
+        const slotEnd = new Date(current.getTime() + 15 * 60000);
+
+        if (slotEnd > end) break;
+
+        const formatTime = (d: Date) => d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true });
+
+        generatedSlots.push({
+          timeString: `${slot.day} ${formatTime(slotStart)} - ${formatTime(slotEnd)}`,
+          isPast: slotStart < now
+        });
+
+        current = new Date(slotEnd.getTime() + 5 * 60000);
+      }
+    });
+
+    return generatedSlots;
   };
 
   const handleJoinQueue = async () => {
@@ -234,7 +243,7 @@ export default function KioskView() {
     );
   }
 
-  const availableFaculty = faculty;
+  const availableFaculty = faculty.filter((f) => getTodayAvailabilitySlots(f).length > 0);
 
   return (
     <div className="min-h-[100dvh] bg-neutral-100 flex flex-col font-sans">
@@ -291,8 +300,8 @@ export default function KioskView() {
                   className="text-center py-12 bg-white rounded-3xl border-2 border-dashed border-neutral-200"
                 >
                   <Users className="w-16 h-16 text-neutral-300 mx-auto mb-4" />
-                  <p className="text-2xl font-medium text-neutral-500">No faculty members found.</p>
-                  <p className="text-lg text-neutral-400 mt-2">Please contact the administrator to add faculty.</p>
+                  <p className="text-2xl font-medium text-neutral-500">No faculty with availability today.</p>
+                  <p className="text-lg text-neutral-400 mt-2">Only faculty who configured time slots for today are shown here.</p>
                   <button 
                     onClick={fetchFaculty}
                     className="mt-6 px-6 py-3 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-bold rounded-xl transition-colors"
