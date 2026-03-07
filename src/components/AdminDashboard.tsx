@@ -959,81 +959,13 @@ export default function AdminDashboard() {
           </h1>
         </div>
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 mr-4 border-r border-neutral-200 pr-4">
-            {driveConnected ? (
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg border border-emerald-100">
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M15.3 18.5H5.4L10.3 10L15.3 18.5Z" fill="#0066DA"/>
-                    <path d="M8.7 18.5H18.6L13.7 10L8.7 18.5Z" fill="#00AC47"/>
-                    <path d="M12 4.5L7.1 13H16.9L12 4.5Z" fill="#EA4335"/>
-                    <path d="M12 4.5L2.2 21.5H12L21.8 4.5H12Z" fill="#FFBA00"/>
-                  </svg>
-                  <span className="text-sm font-medium">
-                    {driveMode === "service_account" ? "Google Connected (Server)" : "Google Connected"}
-                  </span>
-                </div>
-                {oauthConnected && googleExpiryLabel ? (
-                  <span className="px-3 py-1.5 bg-neutral-50 text-neutral-600 text-sm font-medium rounded-lg border border-neutral-200">
-                    Reconnect by {googleExpiryLabel}
-                  </span>
-                ) : null}
-                <span
-                  className={`px-3 py-1.5 text-sm font-medium rounded-lg border ${
-                    meetConnected
-                      ? "bg-blue-50 text-blue-700 border-blue-100"
-                      : "bg-amber-50 text-amber-700 border-amber-100"
-                  }`}
-                >
-                  {meetConnected
-                    ? meetMode === "service_account"
-                      ? "Meet Auto-Links (Server)"
-                      : "Meet Auto-Links Ready"
-                    : "Meet Auto-Links Off"}
-                </span>
-                {!meetConnected ? (
-                  <button
-                    onClick={handleConnectDrive}
-                    className="px-3 py-1.5 bg-white hover:bg-neutral-50 text-neutral-600 text-sm font-medium rounded-lg border border-neutral-200 transition-colors"
-                    title="Enable Google Meet auto-links"
-                  >
-                    Enable Meet Links
-                  </button>
-                ) : oauthConnected ? (
-                  <button
-                    onClick={handleDisconnectDrive}
-                    className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-sm font-medium rounded-lg border border-red-100 transition-colors"
-                    title="Disconnect Google OAuth"
-                  >
-                    Disconnect
-                  </button>
-                ) : (
-                  <span className="px-3 py-1.5 bg-neutral-50 text-neutral-600 text-sm font-medium rounded-lg border border-neutral-200">
-                    Managed by server
-                  </span>
-                )}
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                {oauthExpired ? (
-                  <span className="px-3 py-1.5 bg-amber-50 text-amber-700 text-sm font-medium rounded-lg border border-amber-100">
-                    Google session expired after {tokenMaxAgeDays} days
-                  </span>
-                ) : null}
-                <button
-                  onClick={handleConnectDrive}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-white hover:bg-neutral-50 text-neutral-600 rounded-lg border border-neutral-200 transition-colors"
-                >
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M15.3 18.5H5.4L10.3 10L15.3 18.5Z" fill="#0066DA"/>
-                    <path d="M8.7 18.5H18.6L13.7 10L8.7 18.5Z" fill="#00AC47"/>
-                    <path d="M12 4.5L7.1 13H16.9L12 4.5Z" fill="#EA4335"/>
-                    <path d="M12 4.5L2.2 21.5H12L21.8 4.5H12Z" fill="#FFBA00"/>
-                  </svg>
-                  <span className="text-sm font-medium">{oauthExpired ? "Reconnect Google" : "Connect Google"}</span>
-                </button>
-              </div>
-            )}
+          <div className="hidden xl:flex items-center gap-2 mr-4 border-r border-neutral-200 pr-4">
+            <span className="px-3 py-1.5 bg-blue-50 text-blue-700 text-sm font-medium rounded-lg border border-blue-100">
+              Meet Links: Faculty Google Accounts
+            </span>
+            <span className="px-3 py-1.5 bg-neutral-50 text-neutral-600 text-sm font-medium rounded-lg border border-neutral-200">
+              Faculty connect Google from their own dashboard
+            </span>
           </div>
           <button
             onClick={openAdminPasswordModal}

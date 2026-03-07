@@ -34,6 +34,7 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 const upload = multer({ dest: UPLOADS_DIR });
 
 const TOKEN_PATH = path.join(APP_DATA_DIR, "drive-tokens.json");
+const FACULTY_GOOGLE_TOKENS_PATH = path.join(APP_DATA_DIR, "faculty-google-tokens.json");
 const TOKEN_MAX_AGE_DAYS = 30;
 const OAUTH_CALLBACK_PATH = '/api/auth/google/callback';
 const LEGACY_OAUTH_CALLBACK_PATH = '/auth/callback';
@@ -52,6 +53,15 @@ type AdminOAuthStatus = {
   expired: boolean;
   expiresAt: string | null;
 };
+
+type FacultyGoogleAuthData = {
+  tokens: any;
+  redirectUri?: string;
+  email?: string | null;
+  timestamp: number;
+};
+
+type FacultyGoogleAuthStore = Record<string, FacultyGoogleAuthData>;
 
 type GoogleServiceAccountCredentials = {
   client_email: string;
@@ -192,6 +202,62 @@ function saveAdminTokens(tokens: any, redirectUri: string) {
     timestamp: Date.now(),
     redirectUri
   }));
+}
+
+function readStoredFacultyGoogleAuthData(): FacultyGoogleAuthStore {
+  if (!fs.existsSync(FACULTY_GOOGLE_TOKENS_PATH)) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(fs.readFileSync(FACULTY_GOOGLE_TOKENS_PATH, "utf-8"));
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as FacultyGoogleAuthStore;
+    }
+  } catch (err) {
+    console.error("Failed to read faculty Google auth data:", err);
+  }
+
+  return {};
+}
+
+function writeFacultyGoogleAuthData(store: FacultyGoogleAuthStore) {
+  fs.writeFileSync(FACULTY_GOOGLE_TOKENS_PATH, JSON.stringify(store, null, 2));
+}
+
+function getFacultyGoogleAuthData(facultyId: string) {
+  if (!facultyId) return null;
+  const store = readStoredFacultyGoogleAuthData();
+  return store[facultyId] || null;
+}
+
+function saveFacultyGoogleAuthData(facultyId: string, data: FacultyGoogleAuthData) {
+  if (!facultyId) {
+    throw new Error("Faculty ID is required to save Google auth data.");
+  }
+
+  const store = readStoredFacultyGoogleAuthData();
+  store[facultyId] = data;
+  writeFacultyGoogleAuthData(store);
+}
+
+function deleteFacultyGoogleAuthData(facultyId: string) {
+  if (!facultyId) return;
+
+  const store = readStoredFacultyGoogleAuthData();
+  if (!(facultyId in store)) {
+    return;
+  }
+
+  delete store[facultyId];
+  if (Object.keys(store).length === 0) {
+    if (fs.existsSync(FACULTY_GOOGLE_TOKENS_PATH)) {
+      fs.unlinkSync(FACULTY_GOOGLE_TOKENS_PATH);
+    }
+    return;
+  }
+
+  writeFacultyGoogleAuthData(store);
 }
 
 let supabaseClient: SupabaseClient | null = null;
@@ -483,13 +549,18 @@ async function startServer() {
     return normalizeOAuthRedirectUri(`http://localhost:${PORT}${OAUTH_CALLBACK_PATH}`);
   };
 
+  type OAuthState = {
+    redirectUri?: string;
+    role?: "admin" | "faculty";
+    facultyId?: string;
+  };
   type OAuthAuthContext = { mode: "oauth"; auth: any; tokens: any; redirectUri: string };
   type DriveAuthContext =
     | { mode: "service_account"; auth: any }
     | OAuthAuthContext;
   type MeetAuthContext =
-    | { mode: "service_account"; auth: any }
-    | OAuthAuthContext;
+    | { mode: "service_account"; auth: any; facultyId?: string }
+    | { mode: "faculty_oauth"; auth: any; tokens: any; redirectUri: string; facultyId: string; email?: string | null };
 
   const hasServiceAccountAuth = () => !!getServiceAccountCredentialsFromEnv();
   const hasMeetServiceAccountAuth = () => !!(getServiceAccountCredentialsFromEnv() && getMeetDelegatedUserFromEnv());
@@ -498,6 +569,27 @@ async function startServer() {
     return typeof rawScopes === "string" ? rawScopes.split(/\s+/).filter(Boolean) : [];
   };
   const hasOAuthScope = (scope: string) => getStoredOAuthScopes().includes(scope);
+  const getFacultyStoredOAuthScopes = (facultyId: string) => {
+    const rawScopes = getFacultyGoogleAuthData(facultyId)?.tokens?.scope;
+    return typeof rawScopes === "string" ? rawScopes.split(/\s+/).filter(Boolean) : [];
+  };
+  const hasFacultyOAuthScope = (facultyId: string, scope: string) =>
+    getFacultyStoredOAuthScopes(facultyId).includes(scope);
+  const encodeOAuthState = (state: OAuthState) =>
+    Buffer.from(JSON.stringify(state), "utf-8").toString("base64url");
+  const parseOAuthState = (state: string | null): OAuthState => {
+    if (!state) return {};
+
+    try {
+      return JSON.parse(Buffer.from(state, "base64url").toString("utf-8")) as OAuthState;
+    } catch {
+      try {
+        return JSON.parse(Buffer.from(state, "base64").toString("utf-8")) as OAuthState;
+      } catch {
+        return JSON.parse(state) as OAuthState;
+      }
+    }
+  };
 
   const getDriveConnectionMode = (): "service_account" | "oauth" | "none" => {
     if (hasServiceAccountAuth()) return "service_account";
@@ -507,7 +599,6 @@ async function startServer() {
 
   const getMeetConnectionMode = (): "service_account" | "oauth" | "none" => {
     if (hasMeetServiceAccountAuth()) return "service_account";
-    if (hasOAuthScope(GOOGLE_MEET_CREATE_SCOPE)) return "oauth";
     return "none";
   };
 
@@ -538,7 +629,23 @@ async function startServer() {
     };
   };
 
-  const getMeetAuthContext = (req?: express.Request): MeetAuthContext => {
+  const getMeetAuthContext = (facultyId: string, req?: express.Request): MeetAuthContext => {
+    const facultyAuthData = getFacultyGoogleAuthData(facultyId);
+    if (facultyAuthData?.tokens && hasFacultyOAuthScope(facultyId, GOOGLE_MEET_CREATE_SCOPE)) {
+      const redirectUri = facultyAuthData.redirectUri || resolveOAuthRedirectUri(req);
+      const oauth2Client = getOAuth2Client(redirectUri);
+      oauth2Client.setCredentials(facultyAuthData.tokens);
+
+      return {
+        mode: "faculty_oauth",
+        auth: oauth2Client,
+        tokens: facultyAuthData.tokens,
+        redirectUri,
+        facultyId,
+        email: facultyAuthData.email || null,
+      };
+    }
+
     const serviceAccountCredentials = getServiceAccountCredentialsFromEnv();
     const delegatedUser = getMeetDelegatedUserFromEnv();
 
@@ -549,34 +656,34 @@ async function startServer() {
         scopes: [GOOGLE_MEET_CREATE_SCOPE],
         subject: delegatedUser,
       });
-      return { mode: "service_account", auth };
+      return { mode: "service_account", auth, facultyId };
     }
 
-    const tokens = getAdminTokens();
-    if (!tokens) {
-      throw new Error(
-        "Google Meet is not connected. Reconnect Google in the Admin Dashboard, or configure GOOGLE_MEET_DELEGATED_USER for service-account impersonation."
-      );
-    }
-
-    const redirectUri = getAdminRedirectUri() || resolveOAuthRedirectUri(req);
-    const oauth2Client = getOAuth2Client(redirectUri);
-    oauth2Client.setCredentials(tokens);
-
-    return {
-      mode: "oauth",
-      auth: oauth2Client,
-      tokens,
-      redirectUri,
-    };
+    throw new Error(
+      "Google Meet is not connected for this faculty. Connect your Google account in the Faculty Dashboard or paste a manual Google Meet link."
+    );
   };
 
-  const persistOAuthTokens = (context: DriveAuthContext | MeetAuthContext) => {
+  const persistDriveOAuthTokens = (context: DriveAuthContext) => {
     if (context.mode !== "oauth") return;
 
     const mergedTokens = { ...context.tokens, ...context.auth.credentials };
     if (mergedTokens.refresh_token || context.tokens.refresh_token) {
       saveAdminTokens(mergedTokens, context.redirectUri);
+    }
+  };
+
+  const persistMeetOAuthTokens = (context: MeetAuthContext) => {
+    if (context.mode !== "faculty_oauth") return;
+
+    const mergedTokens = { ...context.tokens, ...context.auth.credentials };
+    if (mergedTokens.refresh_token || context.tokens.refresh_token) {
+      saveFacultyGoogleAuthData(context.facultyId, {
+        tokens: mergedTokens,
+        redirectUri: context.redirectUri,
+        email: context.email || getFacultyGoogleAuthData(context.facultyId)?.email || null,
+        timestamp: Date.now(),
+      });
     }
   };
 
@@ -586,6 +693,14 @@ async function startServer() {
   ) => {
     if (mode === "oauth" && (err?.message || "").includes("invalid_grant") && fs.existsSync(TOKEN_PATH)) {
       fs.unlinkSync(TOKEN_PATH);
+      return true;
+    }
+    return false;
+  };
+
+  const clearExpiredFacultyMeetTokens = (context: MeetAuthContext | null, err: any) => {
+    if (context?.mode === "faculty_oauth" && (err?.message || "").includes("invalid_grant")) {
+      deleteFacultyGoogleAuthData(context.facultyId);
       return true;
     }
     return false;
@@ -607,11 +722,17 @@ async function startServer() {
     return tokenValue;
   };
 
-  const createGoogleMeetLink = async (req?: express.Request) => {
+  const getGoogleAccountEmail = async (authClient: any) => {
+    const oauth2 = google.oauth2({ version: "v2", auth: authClient });
+    const response = await oauth2.userinfo.get();
+    return normalizeEmail(response.data.email);
+  };
+
+  const createGoogleMeetLink = async (facultyId: string, req?: express.Request) => {
     let authContext: MeetAuthContext | null = null;
 
     try {
-      authContext = getMeetAuthContext(req);
+      authContext = getMeetAuthContext(facultyId, req);
       const accessToken = await getGoogleAccessToken(authContext.auth);
       const response = await fetch("https://meet.googleapis.com/v2/spaces", {
         method: "POST",
@@ -638,7 +759,7 @@ async function startServer() {
 
         const lowered = errorMessage.toLowerCase();
         if (response.status === 401 || response.status === 403 || lowered.includes("insufficient") || lowered.includes("scope")) {
-          throw new Error("Google Meet access is not authorized. Reconnect Google in the Admin Dashboard to grant Meet permissions.");
+          throw new Error("Google Meet access is not authorized for this faculty. Reconnect your Google account in the Faculty Dashboard.");
         }
 
         throw new Error(errorMessage);
@@ -649,12 +770,13 @@ async function startServer() {
         throw new Error("Google Meet API did not return a meeting link.");
       }
 
-      persistOAuthTokens(authContext);
+      persistMeetOAuthTokens(authContext);
       return payload.meetingUri.trim();
     } catch (err) {
       if (authContext) {
-        persistOAuthTokens(authContext);
+        persistMeetOAuthTokens(authContext);
       }
+      clearExpiredFacultyMeetTokens(authContext, err);
       throw err;
     }
   };
@@ -1167,7 +1289,7 @@ async function startServer() {
       let autoGeneratedMeetLink: string | null = null;
 
       try {
-        autoGeneratedMeetLink = await createGoogleMeetLink(req);
+        autoGeneratedMeetLink = await createGoogleMeetLink(faculty_id, req);
       } catch (err) {
         console.warn("[Queue Join] Failed to auto-create Google Meet link:", err);
       }
@@ -1517,7 +1639,7 @@ async function startServer() {
         }
 
         if (!finalMeetLink) {
-          finalMeetLink = await createGoogleMeetLink(req);
+          finalMeetLink = await createGoogleMeetLink(consultation.faculty_id, req);
         }
 
         updates.meet_link = time_period ? `${time_period}|${finalMeetLink}` : finalMeetLink;
@@ -1778,7 +1900,7 @@ async function startServer() {
           console.log(`[Drive Cleanup] Deleted old recording: ${file.name}`);
         }
       }
-      persistOAuthTokens(authContext);
+      persistDriveOAuthTokens(authContext);
     } catch (err: any) {
       console.error("[Drive Cleanup] Error:", err);
       clearExpiredOAuthTokens(activeMode, err);
@@ -1867,6 +1989,94 @@ async function startServer() {
 
   scheduleDriveCleanup();
 
+  app.get("/api/faculty/:id/google/status", async (req, res) => {
+    try {
+      const facultyId = getBodyString(req.params.id);
+      if (!facultyId) {
+        return res.status(400).json({ error: "Faculty ID is required." });
+      }
+
+      const stored = getFacultyGoogleAuthData(facultyId);
+      if (stored?.tokens && hasFacultyOAuthScope(facultyId, GOOGLE_MEET_CREATE_SCOPE)) {
+        return res.json({
+          connected: true,
+          mode: "oauth",
+          email: stored.email || null,
+          connectedAt: stored.timestamp ? new Date(stored.timestamp).toISOString() : null,
+        });
+      }
+
+      if (hasMeetServiceAccountAuth()) {
+        return res.json({
+          connected: true,
+          mode: "service_account",
+          email: getMeetDelegatedUserFromEnv() || null,
+          connectedAt: null,
+        });
+      }
+
+      res.json({
+        connected: false,
+        mode: "none",
+        email: stored?.email || null,
+        connectedAt: stored?.timestamp ? new Date(stored.timestamp).toISOString() : null,
+      });
+    } catch (err: any) {
+      console.error("Faculty Google Status Error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/faculty/:id/google/url", async (req, res) => {
+    try {
+      const facultyId = getBodyString(req.params.id);
+      if (!facultyId) {
+        return res.status(400).json({ error: "Faculty ID is required." });
+      }
+
+      const { data: facultyRecord, error: facultyError } = await getSupabase()
+        .from("faculty")
+        .select("id, email")
+        .eq("id", facultyId)
+        .maybeSingle();
+
+      if (facultyError) throw facultyError;
+      if (!facultyRecord) {
+        return res.status(404).json({ error: "Faculty not found." });
+      }
+
+      const redirectUri = resolveOAuthRedirectUri(req);
+      const oauth2Client = getOAuth2Client(redirectUri);
+      const url = oauth2Client.generateAuthUrl({
+        access_type: "offline",
+        scope: [GOOGLE_MEET_CREATE_SCOPE],
+        state: encodeOAuthState({ redirectUri, role: "faculty", facultyId }),
+        prompt: "consent",
+        login_hint: normalizeEmail(facultyRecord.email),
+      });
+
+      res.json({ url, redirectUri, mode: "oauth" });
+    } catch (err: any) {
+      console.error("Faculty Google OAuth URL Error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/faculty/:id/google/disconnect", (req, res) => {
+    try {
+      const facultyId = getBodyString(req.params.id);
+      if (!facultyId) {
+        return res.status(400).json({ error: "Faculty ID is required." });
+      }
+
+      deleteFacultyGoogleAuthData(facultyId);
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error("Faculty Google Disconnect Error:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.get("/api/auth/google/url", (req, res) => {
     try {
       if (hasServiceAccountAuth() && hasMeetServiceAccountAuth()) {
@@ -1901,64 +2111,93 @@ async function startServer() {
   app.get("/api/auth/google/callback", async (req, res) => {
     const code = getQueryString(req.query.code);
     const state = getQueryString(req.query.state);
+    let stateObj: OAuthState = {};
+    let targetOrigin = "*";
+
     try {
-      if (hasServiceAccountAuth() && hasMeetServiceAccountAuth()) {
-        return res
-          .status(400)
-          .send("Service account mode is enabled for Google Drive and Google Meet. OAuth callback is not used.");
-      }
-
-      if (!code) throw new Error("Missing code parameter");
-      
-      let stateObj: { redirectUri?: string } = {};
-      if (state) {
+      stateObj = parseOAuthState(state);
+      const resolvedRedirectUri = stateObj.redirectUri || resolveOAuthRedirectUri(req);
+      targetOrigin = (() => {
         try {
-          stateObj = JSON.parse(Buffer.from(state, 'base64url').toString('utf-8'));
-        } catch (err) {
-          try {
-            stateObj = JSON.parse(Buffer.from(state, 'base64').toString('utf-8'));
-          } catch (fallbackErr) {
-            // Fallback for older non-base64 encoded states if any
-            stateObj = JSON.parse(state);
-          }
-        }
-      }
-      
-      const redirectUri = stateObj.redirectUri || resolveOAuthRedirectUri(req);
-
-      const oauth2Client = getOAuth2Client(redirectUri);
-      
-      const { tokens } = await oauth2Client.getToken(code);
-      const mergedTokens = { ...(getAdminTokens() || {}), ...tokens };
-      
-      saveAdminTokens(mergedTokens, redirectUri);
-
-      const targetOrigin = (() => {
-        try {
-          return new URL(redirectUri).origin;
+          return new URL(resolvedRedirectUri).origin;
         } catch {
           return "*";
         }
       })();
-      
+    } catch {
+      targetOrigin = "*";
+    }
+
+    const sendOAuthResponse = (payload: Record<string, unknown>) => {
+      const serializedPayload = JSON.stringify(payload);
       res.send(`
         <html>
           <body>
             <script>
+              const payload = ${serializedPayload};
               if (window.opener) {
-                window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS' }, '${targetOrigin}');
+                window.opener.postMessage(payload, ${JSON.stringify(targetOrigin)});
                 window.close();
               } else {
                 window.location.href = '/';
               }
             </script>
-            <p>Authentication successful. This window should close automatically.</p>
+            <p>${typeof payload.message === "string" ? payload.message : "Authentication complete."}</p>
           </body>
         </html>
       `);
+    };
+
+    try {
+      if (!code) throw new Error("Missing code parameter");
+
+      const redirectUri = stateObj.redirectUri || resolveOAuthRedirectUri(req);
+      const oauth2Client = getOAuth2Client(redirectUri);
+      const { tokens } = await oauth2Client.getToken(code);
+
+      if (stateObj.role === "faculty" && stateObj.facultyId) {
+        const facultyId = stateObj.facultyId;
+        const existingFacultyTokens = getFacultyGoogleAuthData(facultyId)?.tokens || {};
+        const mergedTokens = { ...existingFacultyTokens, ...tokens };
+        oauth2Client.setCredentials(mergedTokens);
+
+        let accountEmail: string | null = null;
+        try {
+          accountEmail = await getGoogleAccountEmail(oauth2Client);
+        } catch (emailErr) {
+          console.warn("Faculty Google email lookup failed:", emailErr);
+        }
+
+        saveFacultyGoogleAuthData(facultyId, {
+          tokens: mergedTokens,
+          redirectUri,
+          email: accountEmail,
+          timestamp: Date.now(),
+        });
+
+        return sendOAuthResponse({
+          type: "FACULTY_GOOGLE_AUTH_SUCCESS",
+          facultyId,
+          email: accountEmail,
+          message: "Faculty Google connection successful. This window should close automatically.",
+        });
+      }
+
+      const mergedTokens = { ...(getAdminTokens() || {}), ...tokens };
+      saveAdminTokens(mergedTokens, redirectUri);
+
+      sendOAuthResponse({
+        type: "OAUTH_AUTH_SUCCESS",
+        message: "Authentication successful. This window should close automatically.",
+      });
     } catch (err: any) {
       console.error("OAuth Callback Error:", err);
-      res.status(500).send(`Authentication failed: ${err.message || 'Unknown error'}`);
+      res.status(500);
+      sendOAuthResponse({
+        type: stateObj.role === "faculty" ? "FACULTY_GOOGLE_AUTH_ERROR" : "OAUTH_AUTH_ERROR",
+        error: err.message || "Authentication failed.",
+        message: `Authentication failed: ${err.message || "Unknown error"}`,
+      });
     }
   });
 
@@ -2432,7 +2671,7 @@ async function startServer() {
         ])
       );
 
-      persistOAuthTokens(authContext);
+      persistDriveOAuthTokens(authContext);
 
       res.json({
         files: files.map((file) => {
@@ -2542,7 +2781,7 @@ async function startServer() {
         `${isDownload ? "attachment" : "inline"}; filename*=UTF-8''${encodeURIComponent(fileName)}`
       );
 
-      persistOAuthTokens(authContext);
+      persistDriveOAuthTokens(authContext);
 
       if (!upstream.body) {
         throw new Error("Google Drive did not return recording content.");
@@ -2756,7 +2995,7 @@ async function startServer() {
       // Clean up local file
       fs.unlinkSync(file.path);
 
-      persistOAuthTokens(authContext);
+      persistDriveOAuthTokens(authContext);
       
       res.json({
         success: true,
@@ -2790,6 +3029,12 @@ async function startServer() {
         hint: folderHint || quotaHint
       });
     }
+  });
+
+  app.use("/api", (_req, res) => {
+    res.status(404).json({
+      error: "API route not found. If you recently changed backend routes, restart the server or redeploy the app.",
+    });
   });
 
   // Vite middleware for development

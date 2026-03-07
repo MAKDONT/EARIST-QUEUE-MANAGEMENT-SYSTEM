@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Users, CheckCircle, Video, XCircle, ChevronRight, Clock, ArrowLeft, LogOut } from "lucide-react";
+import { clearStaffSession, getStaffSessionUserId } from "../staffSession";
 
 interface Consultation {
   id: number;
@@ -30,6 +31,20 @@ interface RecordingContext {
   studentNumber: string;
 }
 
+const readJsonResponse = async (response: Response, fallbackMessage: string) => {
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
+    throw new Error("Backend API returned HTML instead of JSON. Restart the backend server or redeploy the app, then try again.");
+  }
+
+  const payload = await response.json().catch(() => null);
+  if (payload === null) {
+    throw new Error(fallbackMessage);
+  }
+
+  return payload as Record<string, unknown>;
+};
+
 export default function FacultyDashboard() {
   const { id: selectedFaculty } = useParams();
   const navigate = useNavigate();
@@ -46,20 +61,40 @@ export default function FacultyDashboard() {
   const discardRecordingOnStopRef = useRef(false);
   const recordingContextRef = useRef<RecordingContext | null>(null);
 
+  const logoutStaff = () => {
+    clearStaffSession();
+    navigate("/staff/login");
+  };
+
   useEffect(() => {
-    if (localStorage.getItem("user_role") !== "staff") {
+    const staffUserId = getStaffSessionUserId();
+    if (!staffUserId) {
       navigate("/staff/login");
       return;
     }
+
+    if (selectedFaculty && staffUserId !== selectedFaculty) {
+      navigate(`/faculty/${staffUserId}`, { replace: true });
+      return;
+    }
+
     fetchFaculty();
-  }, [navigate]);
+  }, [navigate, selectedFaculty]);
 
   useEffect(() => {
     if (selectedFaculty) {
       fetchQueue();
+      void fetchGoogleMeetStatus();
       // Setup WebSocket for real-time updates
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const ws = new WebSocket(`${protocol}//${window.location.host}`);
+      let shouldCloseAfterConnect = false;
+
+      ws.onopen = () => {
+        if (shouldCloseAfterConnect) {
+          ws.close();
+        }
+      };
       
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
@@ -71,8 +106,30 @@ export default function FacultyDashboard() {
         }
       };
 
-      return () => ws.close();
+      return () => {
+        shouldCloseAfterConnect = true;
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.close();
+        }
+      };
     }
+  }, [selectedFaculty]);
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.facultyId && String(event.data.facultyId) !== String(selectedFaculty)) {
+        return;
+      }
+
+      if (event.data?.type === "FACULTY_GOOGLE_AUTH_SUCCESS") {
+        void fetchGoogleMeetStatus();
+      } else if (event.data?.type === "FACULTY_GOOGLE_AUTH_ERROR") {
+        alert(`Google connection failed: ${event.data?.error || "Unknown error"}`);
+      }
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
   }, [selectedFaculty]);
 
   useEffect(() => {
@@ -145,14 +202,42 @@ export default function FacultyDashboard() {
   const [recordingStorageReady, setRecordingStorageReady] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [startingSessionId, setStartingSessionId] = useState<number | null>(null);
+  const [googleMeetConnected, setGoogleMeetConnected] = useState(false);
+  const [googleMeetMode, setGoogleMeetMode] = useState<"oauth" | "service_account" | "none">("none");
+  const [googleMeetEmail, setGoogleMeetEmail] = useState<string | null>(null);
+  const [googleMeetConnectedAt, setGoogleMeetConnectedAt] = useState<string | null>(null);
+  const [googleMeetLoading, setGoogleMeetLoading] = useState(false);
+
+  const fetchGoogleMeetStatus = async () => {
+    if (!selectedFaculty) return;
+
+    try {
+      const res = await fetch(`/api/faculty/${selectedFaculty}/google/status`);
+      const data = await readJsonResponse(res, "Failed to load Google Meet connection status.");
+      if (!res.ok) {
+        throw new Error(typeof data.error === "string" ? data.error : "Failed to load Google Meet connection status.");
+      }
+
+      setGoogleMeetConnected(Boolean(data.connected));
+      setGoogleMeetMode(typeof data.mode === "string" ? (data.mode as "oauth" | "service_account" | "none") : "none");
+      setGoogleMeetEmail(typeof data.email === "string" ? data.email : null);
+      setGoogleMeetConnectedAt(typeof data.connectedAt === "string" ? data.connectedAt : null);
+    } catch (err) {
+      console.error("Failed to fetch faculty Google Meet status", err);
+      setGoogleMeetConnected(false);
+      setGoogleMeetMode("none");
+      setGoogleMeetEmail(null);
+      setGoogleMeetConnectedAt(null);
+    }
+  };
 
   const checkRecordingStorageStatus = async () => {
     try {
       const res = await fetch(`/api/recordings/status`);
+      const data = await readJsonResponse(res, "Failed to load recording storage status.");
       if (!res.ok) {
-        throw new Error(`HTTP error! status: ${res.status}`);
+        throw new Error(typeof data.error === "string" ? data.error : `HTTP error! status: ${res.status}`);
       }
-      const data = await res.json();
       const ready = Boolean(data.ready);
       setRecordingStorageReady(ready);
       return ready;
@@ -163,11 +248,66 @@ export default function FacultyDashboard() {
     }
   };
 
+  const handleConnectGoogleMeet = async () => {
+    if (!selectedFaculty) return;
+
+    setGoogleMeetLoading(true);
+    try {
+      const response = await fetch(`/api/faculty/${selectedFaculty}/google/url`);
+      const contentType = response.headers.get("content-type") || "";
+      const data = contentType.includes("application/json")
+        ? await response.json().catch(() => ({}))
+        : null;
+      if (!response.ok) {
+        throw new Error((data as { error?: string } | null)?.error || "Failed to start Google connection.");
+      }
+
+      if (!data || typeof (data as { url?: string }).url !== "string" || !(data as { url: string }).url) {
+        throw new Error("Google OAuth endpoint returned an unexpected response. Restart the backend server or redeploy the app, then try again.");
+      }
+
+      const authWindow = window.open((data as { url: string }).url, "faculty_google_oauth", "width=600,height=700");
+      if (!authWindow) {
+        alert("Please allow popups for this site to connect your Google account.");
+      }
+    } catch (err) {
+      console.error("Faculty Google connect error", err);
+      alert(err instanceof Error ? err.message : "Failed to connect Google Meet.");
+    } finally {
+      setGoogleMeetLoading(false);
+    }
+  };
+
+  const handleDisconnectGoogleMeet = async () => {
+    if (!selectedFaculty) return;
+    if (!googleMeetConnected || googleMeetMode !== "oauth") return;
+    if (!confirm("Disconnect your Google account? Meet links will stop auto-generating until you reconnect.")) {
+      return;
+    }
+
+    setGoogleMeetLoading(true);
+    try {
+      const res = await fetch(`/api/faculty/${selectedFaculty}/google/disconnect`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to disconnect Google.");
+      }
+
+      await fetchGoogleMeetStatus();
+    } catch (err) {
+      console.error("Faculty Google disconnect error", err);
+      alert(err instanceof Error ? err.message : "Failed to disconnect Google.");
+    } finally {
+      setGoogleMeetLoading(false);
+    }
+  };
+
   useEffect(() => {
     void checkRecordingStorageStatus();
 
     const refreshRecordingStorageStatus = () => {
       void checkRecordingStorageStatus();
+      void fetchGoogleMeetStatus();
     };
 
     window.addEventListener("focus", refreshRecordingStorageStatus);
@@ -508,6 +648,15 @@ export default function FacultyDashboard() {
       finalLink = normalizeMeetLink(existingLink);
     }
 
+    if (!draftLink && !finalLink && googleMeetMode === "none") {
+      setManualMeetFallbackOpen((current) => ({
+        ...current,
+        [id]: true,
+      }));
+      alert("Connect your Google account in Integrations or paste a manual Google Meet link before starting the consultation.");
+      return;
+    }
+
     setStartingSessionId(id);
     prepareSessionWindow();
 
@@ -541,7 +690,7 @@ export default function FacultyDashboard() {
       const baseMessage = err instanceof Error ? err.message : "Failed to start consultation.";
       const message = draftLink
         ? baseMessage
-        : `${baseMessage}\nIf Google is not connected, paste a manual Google Meet link and try again.`;
+        : `${baseMessage}\nConnect your Google account in Integrations or paste a manual Google Meet link and try again.`;
       alert(message);
     } finally {
       setStartingSessionId(null);
@@ -638,11 +787,7 @@ export default function FacultyDashboard() {
           </div>
           {/* Mobile Sign Out */}
           <button
-            onClick={() => {
-              localStorage.removeItem("user_role");
-              localStorage.removeItem("user_id");
-              navigate("/staff/login");
-            }}
+            onClick={logoutStaff}
             className="sm:hidden p-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-xl transition-colors"
           >
             <LogOut className="w-5 h-5" />
@@ -659,11 +804,7 @@ export default function FacultyDashboard() {
             {selectedFacultyData ? selectedFacultyData.name : "Loading..."}
           </span>
           <button
-            onClick={() => {
-              localStorage.removeItem("user_role");
-              localStorage.removeItem("user_id");
-              navigate("/staff/login");
-            }}
+            onClick={logoutStaff}
             className="hidden sm:flex items-center gap-2 px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-medium rounded-xl transition-colors"
           >
             <LogOut className="w-4 h-4" /> Sign Out
@@ -784,8 +925,14 @@ export default function FacultyDashboard() {
                             </a>
                           </div>
                         ) : (
-                          <div className="px-3 py-2 rounded-xl text-sm w-full sm:w-72 border border-blue-100 bg-blue-50 text-blue-800">
-                            Google Meet link will be generated automatically when you start the consultation.
+                          <div className={`px-3 py-2 rounded-xl text-sm w-full sm:w-72 border ${
+                            googleMeetMode === "none"
+                              ? "border-amber-100 bg-amber-50 text-amber-800"
+                              : "border-blue-100 bg-blue-50 text-blue-800"
+                          }`}>
+                            {googleMeetMode === "none"
+                              ? "Connect your Google account in Integrations or paste a manual Google Meet link before starting."
+                              : "Google Meet link will be generated automatically when you start the consultation."}
                           </div>
                         )}
                         <div className="w-full sm:w-72 space-y-2">
@@ -890,6 +1037,89 @@ export default function FacultyDashboard() {
 
                 <div className="pt-4 border-t border-neutral-200">
                   <p className="text-sm font-bold text-neutral-900 mb-3">Integrations</p>
+                  <div className="space-y-3 mb-4">
+                    <div
+                      className={`p-3 rounded-xl border flex items-center gap-3 ${
+                        googleMeetConnected
+                          ? googleMeetMode === "oauth"
+                            ? "bg-blue-50 border-blue-100"
+                            : "bg-emerald-50 border-emerald-100"
+                          : "bg-neutral-50 border-neutral-200"
+                      }`}
+                    >
+                      <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-sm shrink-0">
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M15.3 18.5H5.4L10.3 10L15.3 18.5Z" fill="#0066DA"/>
+                          <path d="M8.7 18.5H18.6L13.7 10L8.7 18.5Z" fill="#00AC47"/>
+                          <path d="M12 4.5L7.1 13H16.9L12 4.5Z" fill="#EA4335"/>
+                          <path d="M12 4.5L2.2 21.5H12L21.8 4.5H12Z" fill="#FFBA00"/>
+                        </svg>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-medium truncate ${
+                          googleMeetConnected
+                            ? googleMeetMode === "oauth"
+                              ? "text-blue-800"
+                              : "text-emerald-800"
+                            : "text-neutral-700"
+                        }`}>
+                          {googleMeetMode === "oauth"
+                            ? "Google Meet Auto-Link Ready"
+                            : googleMeetMode === "service_account"
+                              ? "Google Meet Auto-Link Managed by Server"
+                              : "Faculty Google Not Connected"}
+                        </p>
+                        <p className={`text-xs truncate ${
+                          googleMeetConnected
+                            ? googleMeetMode === "oauth"
+                              ? "text-blue-600"
+                              : "text-emerald-600"
+                            : "text-neutral-500"
+                        }`}>
+                          {googleMeetMode === "oauth"
+                            ? googleMeetEmail
+                              ? `Connected as ${googleMeetEmail}`
+                              : "Meet links will be created from your Google account."
+                            : googleMeetMode === "service_account"
+                              ? googleMeetEmail
+                                ? `Server-managed Meet creation is active via ${googleMeetEmail}.`
+                                : "Server-managed Meet creation is active."
+                              : "Connect your Google account so Meet links are created under your own Google profile."}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={handleConnectGoogleMeet}
+                        disabled={googleMeetLoading}
+                        className="px-4 py-2 bg-white hover:bg-neutral-50 disabled:bg-neutral-100 disabled:text-neutral-400 text-neutral-700 text-sm font-medium rounded-xl border border-neutral-200 transition-colors"
+                      >
+                        {googleMeetLoading
+                          ? "Opening Google..."
+                          : googleMeetMode === "oauth"
+                            ? "Reconnect Google"
+                            : "Connect Google"}
+                      </button>
+                      {googleMeetMode === "oauth" && (
+                        <button
+                          type="button"
+                          onClick={handleDisconnectGoogleMeet}
+                          disabled={googleMeetLoading}
+                          className="px-4 py-2 bg-red-50 hover:bg-red-100 disabled:bg-red-50/60 disabled:text-red-300 text-red-700 text-sm font-medium rounded-xl border border-red-100 transition-colors"
+                        >
+                          Disconnect
+                        </button>
+                      )}
+                    </div>
+
+                    {googleMeetMode === "oauth" && googleMeetConnectedAt ? (
+                      <p className="text-xs text-neutral-500">
+                        Connected on {new Date(googleMeetConnectedAt).toLocaleString()}
+                      </p>
+                    ) : null}
+                  </div>
                   {recordingStorageReady ? (
                     <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl flex items-center gap-3">
                       <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-sm shrink-0 text-emerald-700 font-bold text-xs">

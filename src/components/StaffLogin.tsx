@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, LogIn, Users } from "lucide-react";
+import { getStaffSessionUserId, setStaffSession } from "../staffSession";
 
 export default function StaffLogin() {
   const navigate = useNavigate();
@@ -10,8 +11,9 @@ export default function StaffLogin() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (localStorage.getItem("user_role") === "staff" && localStorage.getItem("user_id")) {
-      navigate(`/faculty/${localStorage.getItem("user_id")}`);
+    const staffUserId = getStaffSessionUserId();
+    if (staffUserId) {
+      navigate(`/faculty/${staffUserId}`);
     }
   }, [navigate]);
 
@@ -30,8 +32,7 @@ export default function StaffLogin() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Login failed");
 
-      localStorage.setItem("user_role", "staff");
-      localStorage.setItem("user_id", data.id);
+      setStaffSession(String(data.id));
       navigate(`/faculty/${data.id}`);
     } catch (err: any) {
       setError(err.message || "Failed to login");
