@@ -4,7 +4,7 @@ import { Clock, Video, CheckCircle, AlertCircle, RefreshCw, XCircle } from "luci
 
 interface Consultation {
   id: number;
-  status: "waiting" | "next" | "serving" | "completed" | "cancelled";
+  status: "waiting" | "serving" | "completed" | "cancelled";
   created_at: string;
   faculty_id: string;
   faculty_name: string;
@@ -102,35 +102,6 @@ export default function StudentTracking() {
               <p className="text-neutral-500 text-center max-w-[250px]">
                 You are currently in the queue. Please wait for your turn.
               </p>
-            </div>
-          )}
-
-          {consultation.status === "next" && (
-            <div className="flex flex-col items-center animate-in fade-in slide-in-from-bottom-4 duration-700 w-full">
-              <div className="relative mb-6">
-                <div className="absolute inset-0 bg-amber-400 rounded-full blur-xl opacity-40 animate-pulse" />
-                <div className="bg-amber-100 p-6 rounded-full relative">
-                  <AlertCircle className="w-16 h-16 text-amber-600" />
-                </div>
-              </div>
-              <h2 className="text-3xl font-black text-amber-600 mb-2">You're Next!</h2>
-              <p className="text-amber-700/80 text-center max-w-[250px] mb-6">
-                Please get ready. The professor will start your session shortly.
-              </p>
-              {activeMeetLink ? (
-                <a
-                  href={activeMeetLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-3 w-full py-4 bg-amber-600 hover:bg-amber-700 text-white text-lg font-bold rounded-2xl shadow-[0_8px_30px_rgb(217,119,6,0.3)] transition-all hover:-translate-y-1 active:translate-y-0"
-                >
-                  <Video className="w-6 h-6" /> Enter Virtual Room
-                </a>
-              ) : (
-                <div className="w-full rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-800">
-                  The faculty will provide your meeting link when the consultation starts.
-                </div>
-              )}
             </div>
           )}
 

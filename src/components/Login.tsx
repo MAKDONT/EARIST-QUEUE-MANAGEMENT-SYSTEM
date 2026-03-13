@@ -24,7 +24,7 @@ interface Department {
 
 interface LiveQueueItem {
   id: number;
-  status: "waiting" | "next" | "serving";
+  status: "waiting" | "serving";
   created_at: string;
   faculty_id: string;
   faculty_name: string;
@@ -149,8 +149,7 @@ export default function Login() {
   const sortLiveQueue = (items: LiveQueueItem[]) => {
     const rank = (status: LiveQueueItem["status"]) => {
       if (status === "serving") return 0;
-      if (status === "next") return 1;
-      return 2;
+      return 1;
     };
 
     return [...items].sort((a, b) => {
@@ -175,7 +174,7 @@ export default function Login() {
           if (!Array.isArray(queueData)) return [];
 
           return queueData
-            .filter((item: any) => ["waiting", "next", "serving"].includes(item.status))
+            .filter((item: any) => ["waiting", "serving"].includes(item.status))
             .map((item: any) => ({
               id: Number(item.id),
               status: item.status as LiveQueueItem["status"],
@@ -404,9 +403,8 @@ export default function Login() {
 
   const availableFaculty = faculty.filter((f) => getTodayAvailabilitySlots(f).length > 0);
   const servingStudents = liveQueue.filter((item) => item.status === "serving");
-  const nextStudents = liveQueue.filter((item) => item.status === "next");
   const waitingStudents = liveQueue.filter((item) => item.status === "waiting");
-  const activeStudents = [...servingStudents, ...nextStudents, ...waitingStudents];
+  const activeStudents = [...servingStudents, ...waitingStudents];
 
   return (
     <div className="min-h-[100dvh] bg-neutral-100 flex flex-col lg:flex-row">
@@ -473,7 +471,7 @@ export default function Login() {
         <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-6 sm:p-8 space-y-6 sm:space-y-8">
           <div className="text-center space-y-2">
             <h1 className="text-3xl font-bold text-neutral-900 tracking-tight">
-              Welcome Back
+              Welcome
             </h1>
             <p className="text-neutral-500">Student booking portal</p>
           </div>
@@ -522,7 +520,7 @@ export default function Login() {
                   }`}>
                     <ScanLine className="w-10 h-10 mb-2" />
                     <span className="text-sm font-bold">
-                      {availableFaculty.length === 0 ? "Login Unavailable" : "Scan ID Here"}
+                      {availableFaculty.length === 0 ? "Login Unavailable" : "Please scan the barcode on your student ID"}
                     </span>
                   </div>
 
@@ -640,7 +638,6 @@ export default function Login() {
             <h3 className="text-sm font-bold text-neutral-600 uppercase tracking-wider">Live Queue</h3>
             <div className="flex items-center gap-1.5 text-xs">
               <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold">Now {servingStudents.length}</span>
-              <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-700 font-semibold">Next {nextStudents.length}</span>
               <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-700 font-semibold">Wait {waitingStudents.length}</span>
             </div>
           </div>
@@ -661,9 +658,7 @@ export default function Login() {
                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
                       item.status === "serving"
                         ? "bg-emerald-100 text-emerald-700"
-                        : item.status === "next"
-                          ? "bg-amber-100 text-amber-700"
-                          : "bg-blue-100 text-blue-700"
+                        : "bg-blue-100 text-blue-700"
                     }`}>
                       {item.status}
                     </span>

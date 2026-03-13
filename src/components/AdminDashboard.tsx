@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Shield, LogOut, Plus, Building, UserPlus, ArrowLeft, Trash2, KeyRound, AlertTriangle, Users, FolderOpen, RefreshCw, Search, FileAudio, ExternalLink, Download, Mail } from "lucide-react";
+import { Shield, LogOut, Plus, Building, UserPlus, ArrowLeft, Trash2, KeyRound, AlertTriangle, Users, FolderOpen, RefreshCw, Search, FileAudio, ExternalLink, Download, Mail, Eye, EyeOff } from "lucide-react";
 
 interface LiveQueueItem {
   id: number;
-  status: "waiting" | "next" | "serving";
+  status: "waiting" | "serving";
   created_at: string;
   faculty_id: string;
   faculty_name: string;
@@ -39,17 +39,21 @@ export default function AdminDashboard() {
   // College form
   const [collegeName, setCollegeName] = useState("");
   const [collegeCode, setCollegeCode] = useState("");
-  const [collegePassword, setCollegePassword] = useState("");
   const [addingCollege, setAddingCollege] = useState(false);
   const [collegeError, setCollegeError] = useState("");
+  const [createCollegePasswordModal, setCreateCollegePasswordModal] = useState(false);
+  const [createCollegePassword, setCreateCollegePassword] = useState("");
+  const [createCollegePasswordError, setCreateCollegePasswordError] = useState("");
   
   // Department form
   const [deptName, setDeptName] = useState("");
   const [deptCode, setDeptCode] = useState("");
   const [collegeId, setCollegeId] = useState("");
-  const [deptPassword, setDeptPassword] = useState("");
   const [addingDept, setAddingDept] = useState(false);
   const [deptError, setDeptError] = useState("");
+  const [createDeptPasswordModal, setCreateDeptPasswordModal] = useState(false);
+  const [createDeptPassword, setCreateDeptPassword] = useState("");
+  const [createDeptPasswordError, setCreateDeptPasswordError] = useState("");
   
   // Faculty form
   const [facName, setFacName] = useState("");
@@ -57,9 +61,11 @@ export default function AdminDashboard() {
   const [facDept, setFacDept] = useState("");
   const [facEmail, setFacEmail] = useState("");
   const [facPassword, setFacPassword] = useState("");
-  const [facConfirmPassword, setFacConfirmPassword] = useState("");
   const [addingFac, setAddingFac] = useState(false);
   const [facError, setFacError] = useState("");
+  const [createFacPasswordModal, setCreateFacPasswordModal] = useState(false);
+  const [createFacPassword, setCreateFacPassword] = useState("");
+  const [createFacPasswordError, setCreateFacPasswordError] = useState("");
 
   // Confirmation Modals
   const [deleteCollegeModal, setDeleteCollegeModal] = useState<{ isOpen: boolean; id: string; name: string }>({ isOpen: false, id: "", name: "" });
@@ -108,6 +114,22 @@ export default function AdminDashboard() {
   const [adminEmailSaving, setAdminEmailSaving] = useState(false);
   const [adminEmailError, setAdminEmailError] = useState("");
   const [adminEmailSuccess, setAdminEmailSuccess] = useState(false);
+
+  // Password visibility toggles
+  const [showCreateCollegePassword, setShowCreateCollegePassword] = useState(false);
+  const [showCreateDeptPassword, setShowCreateDeptPassword] = useState(false);
+  const [showCreateFacPassword, setShowCreateFacPassword] = useState(false);
+  const [showAddFacPassword, setShowAddFacPassword] = useState(false);
+  const [showDeleteCollegePassword, setShowDeleteCollegePassword] = useState(false);
+  const [showDeleteDeptPassword, setShowDeleteDeptPassword] = useState(false);
+  const [showDeleteFacPassword, setShowDeleteFacPassword] = useState(false);
+  const [showEditCollegePassword, setShowEditCollegePassword] = useState(false);
+  const [showEditDeptPassword, setShowEditDeptPassword] = useState(false);
+  const [showFacultyPassword, setShowFacultyPassword] = useState(false);
+  const [showFacultyPasswordConfirm, setShowFacultyPasswordConfirm] = useState(false);
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
+  const [showAdminPasswordConfirm, setShowAdminPasswordConfirm] = useState(false);
+  const [showAdminEmailPassword, setShowAdminEmailPassword] = useState(false);
 
   const [driveConnected, setDriveConnected] = useState(false);
   const [driveMode, setDriveMode] = useState<"service_account" | "oauth" | "none">("none");
@@ -304,8 +326,7 @@ export default function AdminDashboard() {
   const sortLiveQueue = (items: LiveQueueItem[]) => {
     const rank = (status: LiveQueueItem["status"]) => {
       if (status === "serving") return 0;
-      if (status === "next") return 1;
-      return 2;
+      return 1;
     };
 
     return [...items].sort((a, b) => {
@@ -330,7 +351,7 @@ export default function AdminDashboard() {
           if (!Array.isArray(queueData)) return [];
 
           return queueData
-            .filter((item: any) => ["waiting", "next", "serving"].includes(item.status))
+            .filter((item: any) => ["waiting", "serving"].includes(item.status))
             .map((item: any) => ({
               id: Number(item.id),
               status: item.status as LiveQueueItem["status"],
@@ -460,7 +481,7 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleAddCollege = async (e: React.FormEvent) => {
+  const handleAddCollege = (e: React.FormEvent) => {
     e.preventDefault();
     setCollegeError("");
 
@@ -472,8 +493,15 @@ export default function AdminDashboard() {
       setCollegeError("College code is required.");
       return;
     }
-    if (!collegePassword.trim()) {
-      setCollegeError("Admin password is required to confirm college creation.");
+
+    setCreateCollegePassword("");
+    setCreateCollegePasswordError("");
+    setCreateCollegePasswordModal(true);
+  };
+
+  const submitCreateCollege = async () => {
+    if (!createCollegePassword.trim()) {
+      setCreateCollegePasswordError("Admin password is required.");
       return;
     }
 
@@ -483,24 +511,25 @@ export default function AdminDashboard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ name: collegeName.trim(), code: collegeCode.trim(), password: collegePassword }),
+        body: JSON.stringify({ name: collegeName.trim(), code: collegeCode.trim(), password: createCollegePassword }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to add college");
       setCollegeName("");
       setCollegeCode("");
-      setCollegePassword("");
+      setCreateCollegePasswordModal(false);
+      setCreateCollegePassword("");
       fetchColleges();
       alert("College added successfully");
     } catch (err: any) {
       console.error(err);
-      setCollegeError(err.message);
+      setCreateCollegePasswordError(err.message);
     } finally {
       setAddingCollege(false);
     }
   };
 
-  const handleAddDepartment = async (e: React.FormEvent) => {
+  const handleAddDepartment = (e: React.FormEvent) => {
     e.preventDefault();
     setDeptError("");
 
@@ -516,8 +545,15 @@ export default function AdminDashboard() {
       setDeptError("College selection is required.");
       return;
     }
-    if (!deptPassword.trim()) {
-      setDeptError("Admin password is required to confirm department creation.");
+
+    setCreateDeptPassword("");
+    setCreateDeptPasswordError("");
+    setCreateDeptPasswordModal(true);
+  };
+
+  const submitCreateDepartment = async () => {
+    if (!createDeptPassword.trim()) {
+      setCreateDeptPasswordError("Admin password is required.");
       return;
     }
 
@@ -527,25 +563,26 @@ export default function AdminDashboard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ name: deptName.trim(), code: deptCode.trim(), college_id: collegeId, password: deptPassword }),
+        body: JSON.stringify({ name: deptName.trim(), code: deptCode.trim(), college_id: collegeId, password: createDeptPassword }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to add department");
       setDeptName("");
       setDeptCode("");
-      setDeptPassword("");
       setCollegeId("");
+      setCreateDeptPasswordModal(false);
+      setCreateDeptPassword("");
       fetchDepartments();
       alert("Department added successfully");
     } catch (err: any) {
       console.error(err);
-      setDeptError(err.message);
+      setCreateDeptPasswordError(err.message);
     } finally {
       setAddingDept(false);
     }
   };
 
-  const handleAddFaculty = async (e: React.FormEvent) => {
+  const handleAddFaculty = (e: React.FormEvent) => {
     e.preventDefault();
     setFacError("");
 
@@ -581,8 +618,14 @@ export default function AdminDashboard() {
       return;
     }
 
-    if (!facConfirmPassword.trim()) {
-      setFacError("Admin password is required to confirm faculty creation.");
+    setCreateFacPassword("");
+    setCreateFacPasswordError("");
+    setCreateFacPasswordModal(true);
+  };
+
+  const submitCreateFaculty = async () => {
+    if (!createFacPassword.trim()) {
+      setCreateFacPasswordError("Admin password is required.");
       return;
     }
 
@@ -599,7 +642,7 @@ export default function AdminDashboard() {
           department_id: facDept,
           email: facEmail.trim(),
           password: facPassword.trim(),
-          password_confirm: facConfirmPassword
+          password_confirm: createFacPassword
         }),
       });
       const data = await res.json();
@@ -609,12 +652,13 @@ export default function AdminDashboard() {
       setFacDept("");
       setFacEmail("");
       setFacPassword("");
-      setFacConfirmPassword("");
+      setCreateFacPasswordModal(false);
+      setCreateFacPassword("");
       fetchFaculties();
       alert("Faculty added successfully");
     } catch (err: any) {
       console.error(err);
-      setFacError(err.message);
+      setCreateFacPasswordError(err.message);
     } finally {
       setAddingFac(false);
     }
@@ -1106,7 +1150,7 @@ export default function AdminDashboard() {
   };
 
   const servingStudents = liveQueue.filter((item) => item.status === "serving");
-  const nextStudents = liveQueue.filter((item) => item.status === "next");
+  const nextStudents = liveQueue.filter((item) => item.status === "serving");
   const waitingStudents = liveQueue.filter((item) => item.status === "waiting");
   const filteredDepartments = departments.filter((d: any) => String(d.college_id) === String(facCollege));
 
@@ -1267,9 +1311,6 @@ export default function AdminDashboard() {
               <span className="px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-sm font-medium border border-emerald-100">
                 Ongoing: {servingStudents.length}
               </span>
-              <span className="px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 text-sm font-medium border border-amber-100">
-                Next: {nextStudents.length}
-              </span>
               <span className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 text-sm font-medium border border-blue-100">
                 Waiting: {waitingStudents.length}
               </span>
@@ -1287,7 +1328,7 @@ export default function AdminDashboard() {
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
-                <h3 className="text-sm font-bold text-neutral-700 uppercase tracking-wider mb-3">Ongoing and Next</h3>
+                <h3 className="text-sm font-bold text-neutral-700 uppercase tracking-wider mb-3">Currently Serving</h3>
                 <div className="space-y-3 max-h-72 overflow-y-auto">
                   {[...servingStudents, ...nextStudents].length === 0 ? (
                     <div className="text-sm text-neutral-400">No students currently serving or next.</div>
@@ -1582,23 +1623,9 @@ export default function AdminDashboard() {
               />
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-neutral-700 block">
-                Admin Password (to confirm)
-              </label>
-              <input
-                type="password"
-                value={collegePassword}
-                onChange={(e) => setCollegePassword(e.target.value)}
-                placeholder="Enter your admin password"
-                className="w-full p-4 border-2 border-neutral-200 rounded-2xl bg-neutral-50 focus:border-purple-500 focus:ring-0 outline-none transition-colors"
-                required
-              />
-            </div>
-
             <button
               type="submit"
-              disabled={addingCollege || !collegeName || !collegeCode || !collegePassword}
+              disabled={addingCollege || !collegeName || !collegeCode}
               className="w-full flex items-center justify-center gap-2 py-4 px-4 bg-purple-600 hover:bg-purple-700 disabled:bg-neutral-300 disabled:cursor-not-allowed text-white text-lg font-bold rounded-2xl shadow-lg transition-all active:scale-95"
             >
               <Plus className="w-5 h-5" />
@@ -1716,23 +1743,9 @@ export default function AdminDashboard() {
               />
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-neutral-700 block">
-                Admin Password (to confirm)
-              </label>
-              <input
-                type="password"
-                value={deptPassword}
-                onChange={(e) => setDeptPassword(e.target.value)}
-                placeholder="Enter your admin password"
-                className="w-full p-4 border-2 border-neutral-200 rounded-2xl bg-neutral-50 focus:border-blue-500 focus:ring-0 outline-none transition-colors"
-                required
-              />
-            </div>
-
             <button
               type="submit"
-              disabled={addingDept || !deptName || !deptCode || !deptPassword || !collegeId}
+              disabled={addingDept || !deptName || !deptCode || !collegeId}
               className="w-full flex items-center justify-center gap-2 py-4 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-neutral-300 disabled:cursor-not-allowed text-white text-lg font-bold rounded-2xl shadow-lg transition-all active:scale-95"
             >
               <Plus className="w-5 h-5" />
@@ -1868,33 +1881,28 @@ export default function AdminDashboard() {
               <label className="text-sm font-medium text-neutral-700 block">
                 Password
               </label>
-              <input
-                type="password"
-                value={facPassword}
-                onChange={(e) => setFacPassword(e.target.value)}
-                placeholder="Enter password"
-                className="w-full p-4 border-2 border-neutral-200 rounded-2xl bg-neutral-50 focus:border-emerald-500 focus:ring-0 outline-none transition-colors"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-neutral-700 block">
-                Admin Password (to confirm)
-              </label>
-              <input
-                type="password"
-                value={facConfirmPassword}
-                onChange={(e) => setFacConfirmPassword(e.target.value)}
-                placeholder="Enter your admin password"
-                className="w-full p-4 border-2 border-neutral-200 rounded-2xl bg-neutral-50 focus:border-emerald-500 focus:ring-0 outline-none transition-colors"
-                required
-              />
+              <div className="relative">
+                <input
+                  type={showAddFacPassword ? "text" : "password"}
+                  value={facPassword}
+                  onChange={(e) => setFacPassword(e.target.value)}
+                  placeholder="Enter password"
+                  className="w-full p-4 pr-12 border-2 border-neutral-200 rounded-2xl bg-neutral-50 focus:border-emerald-500 focus:ring-0 outline-none transition-colors"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowAddFacPassword(!showAddFacPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition-colors"
+                >
+                  {showAddFacPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
             </div>
 
             <button
               type="submit"
-              disabled={addingFac || !facName || !facCollege || !facDept || !facEmail || !facPassword || !facConfirmPassword}
+              disabled={addingFac || !facName || !facCollege || !facDept || !facEmail || !facPassword}
               className="w-full flex items-center justify-center gap-2 py-4 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-neutral-300 disabled:cursor-not-allowed text-white text-lg font-bold rounded-2xl shadow-lg transition-all active:scale-95"
             >
               <Plus className="w-5 h-5" />
@@ -2185,16 +2193,25 @@ export default function AdminDashboard() {
             <p className="text-neutral-600 mb-6">Enter your admin password to confirm changes.</p>
             <div className="mb-4">
               <label className="block text-sm font-semibold text-neutral-700 mb-2">Admin Password</label>
-              <input
-                type="password"
-                value={editCollegePassword}
-                onChange={(e) => {
-                  setEditCollegePassword(e.target.value);
-                  setEditCollegeError("");
-                }}
-                placeholder="Enter admin password"
-                className="w-full px-4 py-2 border-2 border-neutral-300 rounded-xl focus:border-indigo-500 focus:ring-0 outline-none transition-colors"
-              />
+              <div className="relative">
+                <input
+                  type={showEditCollegePassword ? "text" : "password"}
+                  value={editCollegePassword}
+                  onChange={(e) => {
+                    setEditCollegePassword(e.target.value);
+                    setEditCollegeError("");
+                  }}
+                  placeholder="Enter admin password"
+                  className="w-full px-4 py-2 pr-10 border-2 border-neutral-300 rounded-xl focus:border-indigo-500 focus:ring-0 outline-none transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowEditCollegePassword(!showEditCollegePassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition-colors"
+                >
+                  {showEditCollegePassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
               {editCollegeError && <p className="text-sm text-red-600 mt-2">{editCollegeError}</p>}
             </div>
             <div className="flex gap-4">
@@ -2298,16 +2315,25 @@ export default function AdminDashboard() {
             <p className="text-neutral-600 mb-6">Enter your admin password to confirm changes.</p>
             <div className="mb-4">
               <label className="block text-sm font-semibold text-neutral-700 mb-2">Admin Password</label>
-              <input
-                type="password"
-                value={editDepartmentPassword}
-                onChange={(e) => {
-                  setEditDepartmentPassword(e.target.value);
-                  setEditDepartmentError("");
-                }}
-                placeholder="Enter admin password"
-                className="w-full px-4 py-2 border-2 border-neutral-300 rounded-xl focus:border-indigo-500 focus:ring-0 outline-none transition-colors"
-              />
+              <div className="relative">
+                <input
+                  type={showEditDeptPassword ? "text" : "password"}
+                  value={editDepartmentPassword}
+                  onChange={(e) => {
+                    setEditDepartmentPassword(e.target.value);
+                    setEditDepartmentError("");
+                  }}
+                  placeholder="Enter admin password"
+                  className="w-full px-4 py-2 pr-10 border-2 border-neutral-300 rounded-xl focus:border-indigo-500 focus:ring-0 outline-none transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowEditDeptPassword(!showEditDeptPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition-colors"
+                >
+                  {showEditDeptPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
               {editDepartmentError && <p className="text-sm text-red-600 mt-2">{editDepartmentError}</p>}
             </div>
             <div className="flex gap-4">
@@ -2348,16 +2374,25 @@ export default function AdminDashboard() {
             </p>
             <div className="mb-4">
               <label className="block text-sm font-semibold text-neutral-700 mb-2">Admin Password</label>
-              <input
-                type="password"
-                value={deleteCollegePassword}
-                onChange={(e) => {
-                  setDeleteCollegePassword(e.target.value);
-                  setDeleteCollegePasswordError("");
-                }}
-                placeholder="Enter your admin password"
-                className="w-full px-4 py-2 border-2 border-neutral-300 rounded-xl focus:border-red-500 focus:ring-0 outline-none transition-colors"
-              />
+              <div className="relative">
+                <input
+                  type={showDeleteCollegePassword ? "text" : "password"}
+                  value={deleteCollegePassword}
+                  onChange={(e) => {
+                    setDeleteCollegePassword(e.target.value);
+                    setDeleteCollegePasswordError("");
+                  }}
+                  placeholder="Enter your admin password"
+                  className="w-full px-4 py-2 pr-10 border-2 border-neutral-300 rounded-xl focus:border-red-500 focus:ring-0 outline-none transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteCollegePassword(!showDeleteCollegePassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition-colors"
+                >
+                  {showDeleteCollegePassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
               {deleteCollegePasswordError && (
                 <p className="text-sm text-red-600 mt-2">{deleteCollegePasswordError}</p>
               )}
@@ -2398,16 +2433,25 @@ export default function AdminDashboard() {
             </p>
             <div className="mb-4">
               <label className="block text-sm font-semibold text-neutral-700 mb-2">Admin Password</label>
-              <input
-                type="password"
-                value={deleteDepartmentPassword}
-                onChange={(e) => {
-                  setDeleteDepartmentPassword(e.target.value);
-                  setDeleteDepartmentPasswordError("");
-                }}
-                placeholder="Enter your admin password"
-                className="w-full px-4 py-2 border-2 border-neutral-300 rounded-xl focus:border-red-500 focus:ring-0 outline-none transition-colors"
-              />
+              <div className="relative">
+                <input
+                  type={showDeleteDeptPassword ? "text" : "password"}
+                  value={deleteDepartmentPassword}
+                  onChange={(e) => {
+                    setDeleteDepartmentPassword(e.target.value);
+                    setDeleteDepartmentPasswordError("");
+                  }}
+                  placeholder="Enter your admin password"
+                  className="w-full px-4 py-2 pr-10 border-2 border-neutral-300 rounded-xl focus:border-red-500 focus:ring-0 outline-none transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteDeptPassword(!showDeleteDeptPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition-colors"
+                >
+                  {showDeleteDeptPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
               {deleteDepartmentPasswordError && (
                 <p className="text-sm text-red-600 mt-2">{deleteDepartmentPasswordError}</p>
               )}
@@ -2448,16 +2492,25 @@ export default function AdminDashboard() {
             </p>
             <div className="mb-4">
               <label className="block text-sm font-semibold text-neutral-700 mb-2">Admin Password</label>
-              <input
-                type="password"
-                value={deleteFacultyPassword}
-                onChange={(e) => {
-                  setDeleteFacultyPassword(e.target.value);
-                  setDeleteFacultyPasswordError("");
-                }}
-                placeholder="Enter your admin password"
-                className="w-full px-4 py-2 border-2 border-neutral-300 rounded-xl focus:border-red-500 focus:ring-0 outline-none transition-colors"
-              />
+              <div className="relative">
+                <input
+                  type={showDeleteFacPassword ? "text" : "password"}
+                  value={deleteFacultyPassword}
+                  onChange={(e) => {
+                    setDeleteFacultyPassword(e.target.value);
+                    setDeleteFacultyPasswordError("");
+                  }}
+                  placeholder="Enter your admin password"
+                  className="w-full px-4 py-2 pr-10 border-2 border-neutral-300 rounded-xl focus:border-red-500 focus:ring-0 outline-none transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteFacPassword(!showDeleteFacPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition-colors"
+                >
+                  {showDeleteFacPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
               {deleteFacultyPasswordError && (
                 <p className="text-sm text-red-600 mt-2">{deleteFacultyPasswordError}</p>
               )}
@@ -2478,6 +2531,189 @@ export default function AdminDashboard() {
                 className="flex-1 py-3 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-colors"
               >
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create College Password Modal */}
+      {createCollegePasswordModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+            <div className="flex items-center gap-4 text-purple-600 mb-6">
+              <div className="p-3 bg-purple-100 rounded-full">
+                <Building className="w-8 h-8" />
+              </div>
+              <h2 className="text-2xl font-bold text-neutral-900">Create College</h2>
+            </div>
+            <p className="text-neutral-600 mb-6">
+              Confirm creation of <span className="font-bold text-neutral-900">{collegeName}</span> by entering your admin password.
+            </p>
+            <div className="mb-4">
+              <label className="block text-sm font-semibold text-neutral-700 mb-2">Admin Password</label>
+              <div className="relative">
+                <input
+                  type={showCreateCollegePassword ? "text" : "password"}
+                  value={createCollegePassword}
+                  onChange={(e) => {
+                    setCreateCollegePassword(e.target.value);
+                    setCreateCollegePasswordError("");
+                  }}
+                  placeholder="Enter your admin password"
+                  className="w-full px-4 py-2 pr-10 border-2 border-neutral-300 rounded-xl focus:border-purple-500 focus:ring-0 outline-none transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCreateCollegePassword(!showCreateCollegePassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition-colors"
+                >
+                  {showCreateCollegePassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              {createCollegePasswordError && (
+                <p className="text-sm text-red-600 mt-2">{createCollegePasswordError}</p>
+              )}
+            </div>
+            <div className="flex gap-4">
+              <button
+                onClick={() => {
+                  setCreateCollegePasswordModal(false);
+                  setCreateCollegePassword("");
+                  setCreateCollegePasswordError("");
+                }}
+                className="flex-1 py-3 px-4 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-bold rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitCreateCollege}
+                disabled={addingCollege}
+                className="flex-1 py-3 px-4 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white font-bold rounded-xl transition-colors"
+              >
+                {addingCollege ? "Creating..." : "Create College"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Department Password Modal */}
+      {createDeptPasswordModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+            <div className="flex items-center gap-4 text-blue-600 mb-6">
+              <div className="p-3 bg-blue-100 rounded-full">
+                <Building className="w-8 h-8" />
+              </div>
+              <h2 className="text-2xl font-bold text-neutral-900">Create Department</h2>
+            </div>
+            <p className="text-neutral-600 mb-6">
+              Confirm creation of <span className="font-bold text-neutral-900">{deptName}</span> by entering your admin password.
+            </p>
+            <div className="mb-4">
+              <label className="block text-sm font-semibold text-neutral-700 mb-2">Admin Password</label>
+              <div className="relative">
+                <input
+                  type={showCreateDeptPassword ? "text" : "password"}
+                  value={createDeptPassword}
+                  onChange={(e) => {
+                    setCreateDeptPassword(e.target.value);
+                    setCreateDeptPasswordError("");
+                  }}
+                  placeholder="Enter your admin password"
+                  className="w-full px-4 py-2 pr-10 border-2 border-neutral-300 rounded-xl focus:border-blue-500 focus:ring-0 outline-none transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCreateDeptPassword(!showCreateDeptPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition-colors"
+                >
+                  {showCreateDeptPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              {createDeptPasswordError && (
+                <p className="text-sm text-red-600 mt-2">{createDeptPasswordError}</p>
+              )}
+            </div>
+            <div className="flex gap-4">
+              <button
+                onClick={() => {
+                  setCreateDeptPasswordModal(false);
+                  setCreateDeptPassword("");
+                  setCreateDeptPasswordError("");
+                }}
+                className="flex-1 py-3 px-4 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-bold rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitCreateDepartment}
+                disabled={addingDept}
+                className="flex-1 py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold rounded-xl transition-colors"
+              >
+                {addingDept ? "Creating..." : "Create Department"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Faculty Password Modal */}
+      {createFacPasswordModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl">
+            <div className="flex items-center gap-4 text-emerald-600 mb-6">
+              <div className="p-3 bg-emerald-100 rounded-full">
+                <Users className="w-8 h-8" />
+              </div>
+              <h2 className="text-2xl font-bold text-neutral-900">Create Faculty</h2>
+            </div>
+            <p className="text-neutral-600 mb-6">
+              Confirm creation of <span className="font-bold text-neutral-900">{facName}</span> by entering your admin password.
+            </p>
+            <div className="mb-4">
+              <label className="block text-sm font-semibold text-neutral-700 mb-2">Admin Password</label>
+              <div className="relative">
+                <input
+                  type={showCreateFacPassword ? "text" : "password"}
+                  value={createFacPassword}
+                  onChange={(e) => {
+                    setCreateFacPassword(e.target.value);
+                    setCreateFacPasswordError("");
+                  }}
+                  placeholder="Enter your admin password"
+                  className="w-full px-4 py-2 pr-10 border-2 border-neutral-300 rounded-xl focus:border-emerald-500 focus:ring-0 outline-none transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCreateFacPassword(!showCreateFacPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition-colors"
+                >
+                  {showCreateFacPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              {createFacPasswordError && (
+                <p className="text-sm text-red-600 mt-2">{createFacPasswordError}</p>
+              )}
+            </div>
+            <div className="flex gap-4">
+              <button
+                onClick={() => {
+                  setCreateFacPasswordModal(false);
+                  setCreateFacPassword("");
+                  setCreateFacPasswordError("");
+                }}
+                className="flex-1 py-3 px-4 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-bold rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitCreateFaculty}
+                disabled={addingFac}
+                className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white font-bold rounded-xl transition-colors"
+              >
+                {addingFac ? "Creating..." : "Create Faculty"}
               </button>
             </div>
           </div>
@@ -2607,16 +2843,25 @@ export default function AdminDashboard() {
               <label className="block text-sm font-semibold text-neutral-700 mb-2">
                 {editFacultyPasswordSource === "profile" ? "Admin Password" : "New Password"}
               </label>
-              <input
-                type="password"
-                value={facultyPasswordInput}
-                onChange={(e) => {
-                  setFacultyPasswordInput(e.target.value);
-                  setFacultyPasswordError("");
-                }}
-                placeholder={editFacultyPasswordSource === "profile" ? "Enter your admin password" : "Enter new password"}
-                className="w-full px-4 py-2 border-2 border-neutral-300 rounded-xl focus:border-indigo-500 focus:ring-0 outline-none transition-colors"
-              />
+              <div className="relative">
+                <input
+                  type={showFacultyPassword ? "text" : "password"}
+                  value={facultyPasswordInput}
+                  onChange={(e) => {
+                    setFacultyPasswordInput(e.target.value);
+                    setFacultyPasswordError("");
+                  }}
+                  placeholder={editFacultyPasswordSource === "profile" ? "Enter your admin password" : "Enter new password"}
+                  className="w-full px-4 py-2 pr-10 border-2 border-neutral-300 rounded-xl focus:border-indigo-500 focus:ring-0 outline-none transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowFacultyPassword(!showFacultyPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition-colors"
+                >
+                  {showFacultyPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
               {facultyPasswordError && (
                 <p className="text-sm text-red-600 mt-2">{facultyPasswordError}</p>
               )}
@@ -2624,16 +2869,25 @@ export default function AdminDashboard() {
             {editFacultyPasswordSource === "faculty" && (
               <div className="mb-4">
                 <label className="block text-sm font-semibold text-neutral-700 mb-2">Confirm Password</label>
-                <input
-                  type="password"
-                  value={facultyPasswordConfirm}
-                  onChange={(e) => {
-                    setFacultyPasswordConfirm(e.target.value);
-                    setFacultyPasswordError("");
-                  }}
-                  placeholder="Re-enter new password"
-                  className="w-full px-4 py-2 border-2 border-neutral-300 rounded-xl focus:border-indigo-500 focus:ring-0 outline-none transition-colors"
-                />
+                <div className="relative">
+                  <input
+                    type={showFacultyPasswordConfirm ? "text" : "password"}
+                    value={facultyPasswordConfirm}
+                    onChange={(e) => {
+                      setFacultyPasswordConfirm(e.target.value);
+                      setFacultyPasswordError("");
+                    }}
+                    placeholder="Re-enter new password"
+                    className="w-full px-4 py-2 pr-10 border-2 border-neutral-300 rounded-xl focus:border-indigo-500 focus:ring-0 outline-none transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowFacultyPasswordConfirm(!showFacultyPasswordConfirm)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition-colors"
+                  >
+                    {showFacultyPasswordConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
             )}
             <div className="flex gap-4">
@@ -2757,23 +3011,41 @@ export default function AdminDashboard() {
             <div className="space-y-4 mb-6">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-neutral-700 block">New Password</label>
-                <input
-                  type="password"
-                  value={adminPasswordInput}
-                  onChange={(e) => setAdminPasswordInput(e.target.value)}
-                  placeholder="Enter new admin password"
-                  className="w-full p-3 border-2 border-neutral-200 rounded-xl bg-neutral-50 focus:border-indigo-500 focus:ring-0 outline-none transition-colors"
-                />
+                <div className="relative">
+                  <input
+                    type={showAdminPassword ? "text" : "password"}
+                    value={adminPasswordInput}
+                    onChange={(e) => setAdminPasswordInput(e.target.value)}
+                    placeholder="Enter new admin password"
+                    className="w-full p-3 pr-10 border-2 border-neutral-200 rounded-xl bg-neutral-50 focus:border-indigo-500 focus:ring-0 outline-none transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminPassword(!showAdminPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition-colors"
+                  >
+                    {showAdminPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-neutral-700 block">Confirm Password</label>
-                <input
-                  type="password"
-                  value={adminPasswordConfirm}
-                  onChange={(e) => setAdminPasswordConfirm(e.target.value)}
-                  placeholder="Re-enter admin password"
-                  className="w-full p-3 border-2 border-neutral-200 rounded-xl bg-neutral-50 focus:border-indigo-500 focus:ring-0 outline-none transition-colors"
-                />
+                <div className="relative">
+                  <input
+                    type={showAdminPasswordConfirm ? "text" : "password"}
+                    value={adminPasswordConfirm}
+                    onChange={(e) => setAdminPasswordConfirm(e.target.value)}
+                    placeholder="Re-enter admin password"
+                    className="w-full p-3 pr-10 border-2 border-neutral-200 rounded-xl bg-neutral-50 focus:border-indigo-500 focus:ring-0 outline-none transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminPasswordConfirm(!showAdminPasswordConfirm)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition-colors"
+                  >
+                    {showAdminPasswordConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
               {adminPasswordError && <p className="text-sm text-red-600">{adminPasswordError}</p>}
             </div>

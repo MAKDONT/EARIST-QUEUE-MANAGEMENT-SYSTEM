@@ -681,7 +681,7 @@ async function startServer() {
         students (full_name, student_number),
         faculty (name)
       `)
-      .in("status", ["waiting", "next", "serving", "ongoing"])
+      .in("status", ["waiting", "serving", "ongoing"])
       .order("created_at", { ascending: true });
 
     if (error) throw error;
@@ -719,8 +719,7 @@ async function startServer() {
 
     const rank = (status: string) => {
       if (status === "serving") return 0;
-      if (status === "next") return 1;
-      return 2;
+      return 1;
     };
 
     formatted.sort((a: any, b: any) => {
@@ -2090,7 +2089,7 @@ async function startServer() {
         .from("queue")
         .select("id")
         .eq("student_id", student.id)
-        .in("status", ["waiting", "next", "serving", "ongoing"])
+        .in("status", ["waiting", "serving", "ongoing"])
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -2415,7 +2414,7 @@ async function startServer() {
         .from("queue")
         .select("*")
         .eq("student_id", student.id)
-        .in("status", ["waiting", "next", "serving", "ongoing"])
+        .in("status", ["waiting", "serving", "ongoing"])
         .maybeSingle();
 
       if (existing) {
@@ -2511,7 +2510,7 @@ async function startServer() {
         .from("queue")
         .select("faculty_id, meet_link")
         .eq("queue_date", today)
-        .in("status", ["waiting", "next", "serving", "ongoing"]);
+        .in("status", ["waiting", "serving", "ongoing"]);
 
       if (error) throw error;
 
@@ -2704,7 +2703,7 @@ async function startServer() {
           students (full_name, student_number)
         `)
         .eq("faculty_id", req.params.faculty_id)
-        .in("status", ["waiting", "next", "serving", "ongoing"])
+        .in("status", ["waiting", "serving", "ongoing"])
         .order("created_at", { ascending: true });
 
       if (error) {
@@ -2721,7 +2720,7 @@ async function startServer() {
               students (full_name, student_number)
             `)
             .eq("faculty_id", req.params.faculty_id)
-            .in("status", ["waiting", "next", "serving", "ongoing"])
+            .in("status", ["waiting", "serving", "ongoing"])
             .order("created_at", { ascending: true });
 
           data = fallback.data as any;
@@ -3024,7 +3023,7 @@ async function startServer() {
           ...consultation,
           status: mappedStatus,
           faculty_name: (consultation as any).faculty?.name,
-          meet_link: (mappedStatus === "serving" || mappedStatus === "next") ? actual_link : null,
+          meet_link: (mappedStatus === "serving") ? actual_link : null,
           time_period: time_period
         });
       }
@@ -4463,6 +4462,64 @@ async function startServer() {
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on port ${PORT}`);
   });
+
+  // Schedule queue clear every day at 11:59 PM
+  const scheduleQueueClear = () => {
+    const calculateNextClearTime = () => {
+      const now = new Date();
+      const next = new Date(now);
+      next.setHours(23, 59, 0, 0); // 11:59 PM
+      
+      // If 11:59 PM has already passed today, schedule for tomorrow
+      if (next <= now) {
+        next.setDate(next.getDate() + 1);
+      }
+      
+      return next;
+    };
+
+    const clearQueue = async () => {
+      try {
+        const { error } = await getSupabase()
+          .from("queue")
+          .delete()
+          .eq("status", "waiting");
+        
+        if (error) {
+          console.error("Error clearing queue:", error);
+        } else {
+          console.log(`Queue cleared at ${new Date().toISOString()}`);
+        }
+      } catch (err) {
+        console.error("Unexpected error clearing queue:", err);
+      }
+    };
+
+    // Calculate initial delay to next 11:59 PM
+    let nextClearTime = calculateNextClearTime();
+    let timeUntilClear = nextClearTime.getTime() - Date.now();
+
+    console.log(`Queue will be cleared daily at 11:59 PM. Next clear: ${nextClearTime.toISOString()}`);
+
+    // Set initial timeout
+    let timeoutId = setTimeout(() => {
+      clearQueue();
+      
+      // After first clear, set up daily interval (24 hours)
+      const intervalId = setInterval(() => {
+        clearQueue();
+      }, 24 * 60 * 60 * 1000); // 24 hours in milliseconds
+
+      // Make sure interval is cleaned up on process exit
+      process.on("exit", () => clearInterval(intervalId));
+    }, timeUntilClear);
+
+    // Make sure timeout is cleaned up on process exit
+    process.on("exit", () => clearTimeout(timeoutId));
+  };
+
+  // Start the queue clear scheduler
+  scheduleQueueClear();
 }
 
 startServer();

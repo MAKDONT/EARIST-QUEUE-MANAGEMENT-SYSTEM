@@ -2,7 +2,7 @@ import { useState, useCallback } from "react";
 
 interface LiveQueueItem {
   id: number;
-  status: "waiting" | "next" | "serving";
+  status: "waiting" | "serving";
   created_at: string;
   faculty_id: string;
   faculty_name: string;
@@ -19,8 +19,7 @@ export function useLiveQueue() {
   const sortLiveQueue = useCallback((items: LiveQueueItem[]) => {
     const rank = (status: LiveQueueItem["status"]) => {
       if (status === "serving") return 0;
-      if (status === "next") return 1;
-      return 2;
+      return 1;
     };
 
     return [...items].sort((a, b) => {
@@ -45,7 +44,7 @@ export function useLiveQueue() {
           if (!Array.isArray(queueData)) return [];
 
           return queueData
-            .filter((item: any) => ["waiting", "next", "serving"].includes(item.status))
+            .filter((item: any) => ["waiting", "serving"].includes(item.status))
             .map((item: any) => ({
               id: Number(item.id),
               status: item.status as LiveQueueItem["status"],

@@ -443,10 +443,7 @@ export default function KioskView() {
                 <option value="Thesis / Capstone Advising">Thesis / Capstone Advising</option>
                 <option value="Course Enrollment / Schedule">Course Enrollment / Schedule</option>
                 <option value="Internship / OJT Concern">Internship / OJT Concern</option>
-                <option value="Project Guidance">Project Guidance</option>
                 <option value="Attendance / Absence Concern">Attendance / Absence Concern</option>
-                <option value="Personal / Counseling">Personal / Counseling</option>
-                <option value="Scholarship / Financial Aid">Scholarship / Financial Aid</option>
                 <option value="Other">Other</option>
               </select>
             </div>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Users, CheckCircle, Video, XCircle, ChevronRight, Clock, ArrowLeft, LogOut, KeyRound, AlertTriangle } from "lucide-react";
+import { Users, CheckCircle, Video, XCircle, ChevronRight, Clock, ArrowLeft, LogOut, KeyRound, AlertTriangle, Eye, EyeOff } from "lucide-react";
 import { clearStaffSession, getStaffSessionUserId } from "../staffSession";
 
 interface Consultation {
@@ -8,7 +8,7 @@ interface Consultation {
   student_id: string;
   student_name: string;
   student_number?: string;
-  status: "waiting" | "next" | "serving";
+  status: "waiting" | "serving";
   created_at: string;
   source: string;
   meet_link?: string;
@@ -73,6 +73,8 @@ export default function FacultyDashboard() {
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [passwordError, setPasswordError] = useState("");
   const [passwordSaving, setPasswordSaving] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
   const sessionWindowRef = useRef<Window | null>(null);
   const microphoneStreamRef = useRef<MediaStream | null>(null);
   const displayStreamRef = useRef<MediaStream | null>(null);
@@ -644,17 +646,7 @@ export default function FacultyDashboard() {
       }
       
       if (autoCallNext && (status === "completed" || status === "cancelled")) {
-        const alreadyNext = queue.find(s => s.status === "next" && s.id !== id);
-        if (!alreadyNext) {
-          const nextStudent = queue.find(s => s.status === "waiting" && s.id !== id);
-          if (nextStudent) {
-            await fetch(`/api/queue/${nextStudent.id}/status`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ status: "next" }),
-            });
-          }
-        }
+        // Auto-next functionality removed with next status elimination
       }
       
       fetchQueue();
@@ -1054,8 +1046,6 @@ export default function FacultyDashboard() {
                   className={`bg-white rounded-2xl p-4 sm:p-6 shadow-sm border-l-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all ${
                     student.status === "serving"
                       ? "border-emerald-500 ring-2 ring-emerald-500/20 bg-emerald-50/50"
-                      : student.status === "next"
-                      ? "border-amber-500 ring-2 ring-amber-500/20"
                       : "border-neutral-300"
                   }`}
                 >
@@ -1089,7 +1079,7 @@ export default function FacultyDashboard() {
                   </div>
 
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto mt-2 sm:mt-0">
-                    {(student.status === "waiting" || student.status === "next") && (
+                    {(student.status === "waiting") && (
                       <div className="flex flex-col gap-2 items-stretch sm:items-end w-full sm:w-auto">
                         {student.meet_link ? (
                           <div className="flex items-center gap-2 bg-indigo-50 px-3 py-2 rounded-xl text-sm w-full sm:w-72 border border-indigo-100">
@@ -1407,30 +1397,48 @@ export default function FacultyDashboard() {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-neutral-700 mb-2">New Password</label>
-                <input
-                  type="password"
-                  value={passwordInput}
-                  onChange={(e) => {
-                    setPasswordInput(e.target.value);
-                    setPasswordError("");
-                  }}
-                  placeholder="At least 8 characters"
-                  className="w-full px-4 py-3 border border-neutral-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
-                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={passwordInput}
+                    onChange={(e) => {
+                      setPasswordInput(e.target.value);
+                      setPasswordError("");
+                    }}
+                    placeholder="At least 8 characters"
+                    className="w-full px-4 py-3 pr-10 border border-neutral-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
 
               <div>
                 <label className="block text-sm font-semibold text-neutral-700 mb-2">Confirm Password</label>
-                <input
-                  type="password"
-                  value={passwordConfirm}
-                  onChange={(e) => {
-                    setPasswordConfirm(e.target.value);
-                    setPasswordError("");
-                  }}
-                  placeholder="Re-enter your new password"
-                  className="w-full px-4 py-3 border border-neutral-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
-                />
+                <div className="relative">
+                  <input
+                    type={showPasswordConfirm ? "text" : "password"}
+                    value={passwordConfirm}
+                    onChange={(e) => {
+                      setPasswordConfirm(e.target.value);
+                      setPasswordError("");
+                    }}
+                    placeholder="Re-enter your new password"
+                    className="w-full px-4 py-3 pr-10 border border-neutral-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPasswordConfirm(!showPasswordConfirm)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition-colors"
+                  >
+                    {showPasswordConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
 
               {passwordError && (
