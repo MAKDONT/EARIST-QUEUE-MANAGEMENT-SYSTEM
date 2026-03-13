@@ -1035,7 +1035,7 @@ export default function FacultyDashboard() {
         {/* Queue List */}
         <div className="lg:col-span-2 space-y-4 sm:space-y-6 min-h-0">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-xl sm:text-2xl font-bold text-neutral-900">Live Queue (FIFO)</h2>
+            <h2 className="text-xl sm:text-2xl font-bold text-neutral-900">Live Queue</h2>
             <span className="w-fit px-4 py-2 bg-indigo-100 text-indigo-800 rounded-full font-medium">
               {queue.length} Students Waiting
             </span>

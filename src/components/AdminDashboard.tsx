@@ -39,6 +39,7 @@ export default function AdminDashboard() {
   // College form
   const [collegeName, setCollegeName] = useState("");
   const [collegeCode, setCollegeCode] = useState("");
+  const [collegePassword, setCollegePassword] = useState("");
   const [addingCollege, setAddingCollege] = useState(false);
   const [collegeError, setCollegeError] = useState("");
   
@@ -46,6 +47,7 @@ export default function AdminDashboard() {
   const [deptName, setDeptName] = useState("");
   const [deptCode, setDeptCode] = useState("");
   const [collegeId, setCollegeId] = useState("");
+  const [deptPassword, setDeptPassword] = useState("");
   const [addingDept, setAddingDept] = useState(false);
   const [deptError, setDeptError] = useState("");
   
@@ -55,6 +57,7 @@ export default function AdminDashboard() {
   const [facDept, setFacDept] = useState("");
   const [facEmail, setFacEmail] = useState("");
   const [facPassword, setFacPassword] = useState("");
+  const [facConfirmPassword, setFacConfirmPassword] = useState("");
   const [addingFac, setAddingFac] = useState(false);
   const [facError, setFacError] = useState("");
 
@@ -469,6 +472,10 @@ export default function AdminDashboard() {
       setCollegeError("College code is required.");
       return;
     }
+    if (!collegePassword.trim()) {
+      setCollegeError("Admin password is required to confirm college creation.");
+      return;
+    }
 
     setAddingCollege(true);
     try {
@@ -476,12 +483,13 @@ export default function AdminDashboard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ name: collegeName.trim(), code: collegeCode.trim() }),
+        body: JSON.stringify({ name: collegeName.trim(), code: collegeCode.trim(), password: collegePassword }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to add college");
       setCollegeName("");
       setCollegeCode("");
+      setCollegePassword("");
       fetchColleges();
       alert("College added successfully");
     } catch (err: any) {
@@ -508,6 +516,10 @@ export default function AdminDashboard() {
       setDeptError("College selection is required.");
       return;
     }
+    if (!deptPassword.trim()) {
+      setDeptError("Admin password is required to confirm department creation.");
+      return;
+    }
 
     setAddingDept(true);
     try {
@@ -515,12 +527,14 @@ export default function AdminDashboard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ name: deptName.trim(), code: deptCode.trim(), college_id: collegeId }),
+        body: JSON.stringify({ name: deptName.trim(), code: deptCode.trim(), college_id: collegeId, password: deptPassword }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to add department");
       setDeptName("");
       setDeptCode("");
+      setDeptPassword("");
+      setCollegeId("");
       fetchDepartments();
       alert("Department added successfully");
     } catch (err: any) {
@@ -559,11 +573,16 @@ export default function AdminDashboard() {
     }
 
     if (!facPassword.trim()) {
-      setFacError("Password is required.");
+      setFacError("Faculty password is required.");
       return;
     }
     if (facPassword.trim().length < 6) {
-      setFacError("Password must be at least 6 characters long.");
+      setFacError("Faculty password must be at least 6 characters long.");
+      return;
+    }
+
+    if (!facConfirmPassword.trim()) {
+      setFacError("Admin password is required to confirm faculty creation.");
       return;
     }
 
@@ -579,7 +598,8 @@ export default function AdminDashboard() {
           name: facName.trim(),
           department_id: facDept,
           email: facEmail.trim(),
-          password: facPassword.trim()
+          password: facPassword.trim(),
+          password_confirm: facConfirmPassword
         }),
       });
       const data = await res.json();
@@ -589,6 +609,7 @@ export default function AdminDashboard() {
       setFacDept("");
       setFacEmail("");
       setFacPassword("");
+      setFacConfirmPassword("");
       fetchFaculties();
       alert("Faculty added successfully");
     } catch (err: any) {
@@ -1561,9 +1582,23 @@ export default function AdminDashboard() {
               />
             </div>
 
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-neutral-700 block">
+                Admin Password (to confirm)
+              </label>
+              <input
+                type="password"
+                value={collegePassword}
+                onChange={(e) => setCollegePassword(e.target.value)}
+                placeholder="Enter your admin password"
+                className="w-full p-4 border-2 border-neutral-200 rounded-2xl bg-neutral-50 focus:border-purple-500 focus:ring-0 outline-none transition-colors"
+                required
+              />
+            </div>
+
             <button
               type="submit"
-              disabled={addingCollege || !collegeName || !collegeCode}
+              disabled={addingCollege || !collegeName || !collegeCode || !collegePassword}
               className="w-full flex items-center justify-center gap-2 py-4 px-4 bg-purple-600 hover:bg-purple-700 disabled:bg-neutral-300 disabled:cursor-not-allowed text-white text-lg font-bold rounded-2xl shadow-lg transition-all active:scale-95"
             >
               <Plus className="w-5 h-5" />
@@ -1681,9 +1716,23 @@ export default function AdminDashboard() {
               />
             </div>
 
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-neutral-700 block">
+                Admin Password (to confirm)
+              </label>
+              <input
+                type="password"
+                value={deptPassword}
+                onChange={(e) => setDeptPassword(e.target.value)}
+                placeholder="Enter your admin password"
+                className="w-full p-4 border-2 border-neutral-200 rounded-2xl bg-neutral-50 focus:border-blue-500 focus:ring-0 outline-none transition-colors"
+                required
+              />
+            </div>
+
             <button
               type="submit"
-              disabled={addingDept || !deptName || !deptCode}
+              disabled={addingDept || !deptName || !deptCode || !deptPassword || !collegeId}
               className="w-full flex items-center justify-center gap-2 py-4 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-neutral-300 disabled:cursor-not-allowed text-white text-lg font-bold rounded-2xl shadow-lg transition-all active:scale-95"
             >
               <Plus className="w-5 h-5" />
@@ -1829,9 +1878,23 @@ export default function AdminDashboard() {
               />
             </div>
 
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-neutral-700 block">
+                Admin Password (to confirm)
+              </label>
+              <input
+                type="password"
+                value={facConfirmPassword}
+                onChange={(e) => setFacConfirmPassword(e.target.value)}
+                placeholder="Enter your admin password"
+                className="w-full p-4 border-2 border-neutral-200 rounded-2xl bg-neutral-50 focus:border-emerald-500 focus:ring-0 outline-none transition-colors"
+                required
+              />
+            </div>
+
             <button
               type="submit"
-              disabled={addingFac || !facName || !facCollege || !facDept || !facEmail || !facPassword}
+              disabled={addingFac || !facName || !facCollege || !facDept || !facEmail || !facPassword || !facConfirmPassword}
               className="w-full flex items-center justify-center gap-2 py-4 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-neutral-300 disabled:cursor-not-allowed text-white text-lg font-bold rounded-2xl shadow-lg transition-all active:scale-95"
             >
               <Plus className="w-5 h-5" />
@@ -1932,7 +1995,7 @@ export default function AdminDashboard() {
                                       </span>
                                     </td>
                                     <td className="py-4 px-4 text-right">
-                                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <div className="flex items-center justify-end gap-2">
                                         <button
                                           onClick={() => openEditFacultyProfileModal(fac.id, fac.name, fac.email, fac.department_id, fac.college_id)}
                                           className="px-2 py-1 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
@@ -1943,7 +2006,8 @@ export default function AdminDashboard() {
                                         <button
                                           onClick={() => openEditFacultyPasswordModal(fac.id, fac.name)}
                                           className="p-2 text-neutral-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                                          title="Edit Password"
+                                          title="Change Password"
+                                          type="button"
                                         >
                                           <KeyRound className="w-4 h-4" />
                                         </button>
@@ -2012,7 +2076,7 @@ export default function AdminDashboard() {
                             </span>
                           </td>
                           <td className="py-4 px-4 text-right">
-                            <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="flex items-center justify-end gap-2">
                               <button
                                 onClick={() => openEditFacultyProfileModal(fac.id, fac.name, fac.email, fac.department_id, fac.college_id)}
                                 className="px-2 py-1 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
@@ -2023,7 +2087,8 @@ export default function AdminDashboard() {
                               <button
                                 onClick={() => openEditFacultyPasswordModal(fac.id, fac.name)}
                                 className="p-2 text-neutral-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                                title="Edit Password"
+                                title="Change Password"
+                                type="button"
                               >
                                 <KeyRound className="w-4 h-4" />
                               </button>
