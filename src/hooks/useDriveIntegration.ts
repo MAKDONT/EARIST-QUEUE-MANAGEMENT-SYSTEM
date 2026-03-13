@@ -36,6 +36,9 @@ export function useDriveIntegration() {
   const checkDriveStatus = useCallback(async () => {
     try {
       const res = await fetch(`/api/drive/status`);
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
       const data = await res.json();
       setDriveConnected(data.driveConnected ?? data.connected);
       setDriveMode(data.driveMode || data.mode || "none");
@@ -46,17 +49,18 @@ export function useDriveIntegration() {
       setOauthExpiresAt(typeof data.oauthExpiresAt === "string" ? data.oauthExpiresAt : null);
       setTokenMaxAgeDays(typeof data.tokenMaxAgeDays === "number" ? data.tokenMaxAgeDays : 30);
     } catch (err) {
-      console.error("Failed to check drive status", err);
+      console.error("Failed to check drive status", err instanceof Error ? err.message : String(err));
     }
-  }, []);
+  }, [])
 
   const checkRecordingStorageStatus = useCallback(async () => {
     try {
       const res = await fetch("/api/recordings/status");
-      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: `HTTP error! status: ${res.status}` }));
         throw new Error(data.error || "Supabase recording storage is unavailable.");
       }
+      const data = await res.json();
 
       const ready = Boolean(data.ready);
       setRecordingStorageReady(ready);
@@ -65,7 +69,7 @@ export function useDriveIntegration() {
       }
       return ready;
     } catch (err) {
-      console.error("Failed to check recording storage status", err);
+      console.error("Failed to check recording storage status", err instanceof Error ? err.message : String(err));
       setRecordingStorageReady(false);
       setDriveRecordingsError(err instanceof Error ? err.message : "Supabase recording storage is unavailable.");
       return false;
@@ -78,14 +82,14 @@ export function useDriveIntegration() {
 
     setDriveRecordingsLoading(true);
     setDriveRecordingsError("");
-
     try {
       const query = pageToken ? `?pageToken=${encodeURIComponent(pageToken)}` : "";
       const res = await fetch(`/api/recordings${query}`);
-      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: `HTTP error! status: ${res.status}` }));
         throw new Error(data.error || "Failed to load consultation recordings.");
       }
+      const data = await res.json();
 
       const files = Array.isArray(data.files) ? (data.files as DriveRecording[]) : [];
       setDriveRecordings((current) => (loadMore ? [...current, ...files] : files));
@@ -98,7 +102,7 @@ export function useDriveIntegration() {
         return mergedFiles[0]?.id || null;
       });
     } catch (err) {
-      console.error("Failed to fetch consultation recordings", err);
+      console.error("Failed to fetch consultation recordings", err instanceof Error ? err.message : String(err));
       setDriveRecordingsError(err instanceof Error ? err.message : "Failed to load consultation recordings.");
     } finally {
       setDriveRecordingsLoading(false);

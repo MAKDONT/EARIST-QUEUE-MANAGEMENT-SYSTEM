@@ -2422,7 +2422,37 @@ async function startServer() {
       }
 
       const targetEmail = student_email || student?.email;
-      const meetLinkToSave = time_period || null;
+      let meetLinkToSave = time_period || null;
+      let generatedMeetLink = null;
+
+      // Generate Google Meet link when student joins the queue
+      try {
+        if (faculty_id) {
+          console.log(`🔄 Attempting to generate Google Meet link for faculty ${faculty_id}...`);
+          const googleMeetLink = await createGoogleMeetLink(faculty_id, req);
+          
+          if (googleMeetLink) {
+            console.log(`✅ Generated Google Meet link: ${googleMeetLink}`);
+            generatedMeetLink = googleMeetLink;
+            
+            // Combine time_period and meet link if both exist
+            if (time_period && googleMeetLink) {
+              meetLinkToSave = `${time_period}|${googleMeetLink}`;
+              console.log(`✅ Stored as: ${meetLinkToSave}`);
+            } else if (googleMeetLink) {
+              meetLinkToSave = googleMeetLink;
+              console.log(`✅ Stored as: ${meetLinkToSave}`);
+            }
+          } else {
+            console.error(`❌ Google Meet API returned empty link`);
+          }
+        }
+      } catch (meetErr: any) {
+        console.error(`❌ Google Meet link generation failed: ${meetErr?.message || String(meetErr)}`);
+        console.error(`   Stack: ${meetErr?.stack || 'N/A'}`);
+        console.log(`⚠ Proceeding without meet link - will retry when reminder is sent`);
+        // Still proceed - we'll generate it again in the scheduler if needed
+      }
 
       const queueInsertBase = {
         student_id: student.id,
@@ -2486,7 +2516,7 @@ async function startServer() {
           <p>Hi ${formatted.student_name || 'Student'},</p>
           <p>You have successfully joined the queue for a consultation with <strong>${formatted.faculty_name || 'your selected faculty'}</strong>.</p>
           ${time_period ? `<p><strong>Time Slot:</strong> ${time_period}</p>` : ''}
-          <p><strong>Virtual Consultation Room:</strong> The faculty will provide the Google Meet link when it is your turn.</p>
+          <p><strong>Virtual Consultation Room:</strong> You will receive the Google Meet link via email 5 minutes before your consultation starts.</p>
           <p>Please keep this email. You can track your status on the kiosk or wait for further notifications.</p>
           <br/>
           <p>Thank you!</p>
@@ -2823,6 +2853,13 @@ async function startServer() {
       const { status, meet_link, recording_enabled } = req.body;
       const consultationId = req.params.id;
       
+      console.log(`\n====================================`);
+      console.log(`🔵 [QUEUE STATUS] ENDPOINT CALLED`);
+      console.log(`   Consultation ID: ${consultationId}`);
+      console.log(`   Status: ${status}`);
+      console.log(`   Recording Enabled: ${recording_enabled}`);
+      console.log(`====================================\n`);
+      
       if (!status || typeof status !== "string") {
         return res.status(400).json({ error: "Status is required and must be a string" });
       }
@@ -2930,54 +2967,15 @@ async function startServer() {
 
       if (updateError) throw updateError;
 
-      // Notification Logic
-      const { data: studentData } = await getSupabase()
-        .from("students")
-        .select("email, full_name")
-        .eq("id", consultation.student_id)
-        .maybeSingle();
-      
-      const targetEmail = consultation.student_email || studentData?.email;
-      const studentName = studentData?.full_name || "Student";
-      
+      // Extract meet link info for response
       const parts = consultation.meet_link ? consultation.meet_link.split('|') : [];
-      const actual_link = parts.length > 1 ? parts[1] : (parts.length === 1 && parts[0].startsWith('http') ? parts[0] : null);
-      const final_email_link = finalMeetLink || actual_link;
+      const actual_link = parts.length > 1 ? parts[1] : (parts.length === 1 && parts[0]?.startsWith('http') ? parts[0] : null);
+      const final_email_link = status === "serving" ? (finalMeetLink || actual_link) : actual_link;
 
-      if (targetEmail) {
-        if (status === "serving") {
-          sendEmailNotification(
-            targetEmail,
-            "It's your turn!",
-            `
-            <h2>Consultation Started</h2>
-            <p>Hi ${studentName},</p>
-            <p>It's your turn for the consultation!</p>
-            ${final_email_link ? `<p>Join the meeting here: <a href="${final_email_link}">${final_email_link}</a></p>` : ''}
-            `
-          );
-        } else if (status === "completed") {
-          sendEmailNotification(
-            targetEmail,
-            "Consultation Completed",
-            `
-            <h2>Consultation Completed</h2>
-            <p>Hi ${studentName},</p>
-            <p>Your consultation has been marked as completed. Thank you!</p>
-            `
-          );
-        } else if (status === "cancelled") {
-          sendEmailNotification(
-            targetEmail,
-            "Consultation Cancelled",
-            `
-            <h2>Consultation Cancelled</h2>
-            <p>Hi ${studentName},</p>
-            <p>Your consultation has been cancelled.</p>
-            `
-          );
-        }
-      }
+      console.log(`✅ Queue Status Updated - ID: ${consultationId}, Status: ${status}`);
+
+      // Note: Email reminders are now sent by the background scheduler 5 minutes before consultation time
+      // This endpoint is only responsible for status updates
 
       await logAudit("consultation_status_updated", { 
         consultation_id: consultationId, 
@@ -2988,7 +2986,8 @@ async function startServer() {
       broadcast("queue_updated", { faculty_id: consultation.faculty_id });
       res.json({ success: true, meet_link: final_email_link || null });
     } catch (err: any) {
-      console.error("Queue status update error:", err);
+      console.error("❌ Queue status update error:", err?.message || err);
+      console.error("Stack trace:", err?.stack || "N/A");
       res.status(500).json({ error: "Internal server error" });
     }
   });
@@ -3845,9 +3844,9 @@ async function startServer() {
       try {
         // Validate file name
         validators.fileName(file.originalname);
-        // Validate MIME type (optional but should be audio/video)
-        if (file.mimetype && !/^(audio|video)\//.test(file.mimetype)) {
-          throw new Error("Invalid file type. Expected audio or video file");
+        // Re-validate MIME type against whitelist (defense in depth)
+        if (!ALLOWED_UPLOAD_MIMETYPES.includes(file.mimetype)) {
+          throw new Error(`File type not allowed. Accepted types: ${ALLOWED_UPLOAD_MIMETYPES.join(", ")}`);
         }
         // Validate IDs if provided
         if (req.body?.faculty_id) validators.facultyId(req.body.faculty_id);
@@ -4459,6 +4458,135 @@ async function startServer() {
     });
   }
 
+  // TEST ENDPOINT: Bypass time and directly test email notification
+  app.post("/api/test/send-next-student-email", async (req, res) => {
+    try {
+      const { faculty_id, student_email_to_notify } = req.body;
+      
+      console.log("\n🧪 TEST ENDPOINT: Testing next student email notification");
+      console.log(`📧 Will send email to: ${student_email_to_notify}`);
+      
+      if (!student_email_to_notify || !student_email_to_notify.includes("@")) {
+        return res.status(400).json({ error: "student_email_to_notify is required and must be valid" });
+      }
+
+      // Get a random faculty if not specified
+      let testFacultyId = faculty_id;
+      if (!testFacultyId) {
+        const { data: faculties } = await getSupabase()
+          .from("faculty")
+          .select("id")
+          .limit(1);
+        
+        if (!faculties || faculties.length === 0) {
+          return res.status(400).json({ error: "No faculty found in system" });
+        }
+        testFacultyId = faculties[0].id;
+      }
+
+      console.log(`👨‍🏫 Using faculty: ${testFacultyId}`);
+
+      // Create a test meet link
+      const testMeetLink = `https://meet.google.com/test-${Date.now()}`;
+      
+      // Create test current consultation (will be marked as completed)
+      const { data: currentConsult, error: currentErr } = await getSupabase()
+        .from("queue")
+        .insert({
+          student_id: `TEST-CURRENT-${Date.now()}`,
+          faculty_id: testFacultyId,
+          status: "ongoing",
+          meet_link: `10:00-10:30|${testMeetLink}`,
+          student_email: `current-test-${Date.now()}@test.com`
+        })
+        .select()
+        .single();
+
+      if (currentErr) {
+        console.error("❌ Failed to create current consultation:", currentErr);
+        return res.status(500).json({ error: "Failed to create test consultation" });
+      }
+
+      console.log(`✅ Created current consultation: ${currentConsult.id}`);
+
+      // Create test next student (the one who should get the email)
+      const { data: nextConsult, error: nextErr } = await getSupabase()
+        .from("queue")
+        .insert({
+          student_id: `TEST-NEXT-${Date.now()}`,
+          faculty_id: testFacultyId,
+          status: "waiting",
+          meet_link: "10:30-11:00",
+          student_email: student_email_to_notify,
+          students_full_name: "Test Next Student"
+        })
+        .select()
+        .single();
+
+      if (nextErr) {
+        // Try without students_full_name since it might not exist
+        const { data: nextConsult2, error: nextErr2 } = await getSupabase()
+          .from("queue")
+          .insert({
+            student_id: `TEST-NEXT-${Date.now()}`,
+            faculty_id: testFacultyId,
+            status: "waiting",
+            meet_link: "10:30-11:00",
+            student_email: student_email_to_notify
+          })
+          .select()
+          .single();
+
+        if (nextErr2) {
+          console.error("❌ Failed to create next consultation:", nextErr2);
+          return res.status(500).json({ error: "Failed to create next student in queue" });
+        }
+      }
+
+      console.log(`✅ Created next student consultation: ${nextConsult?.id || "created"}`);
+
+      // NOW MANUALLY TRIGGER THE EMAIL SENDING LOGIC
+      console.log(`\n📧 Triggering email notification to: ${student_email_to_notify}`);
+      
+      try {
+        sendEmailNotification(
+          student_email_to_notify,
+          "Your turn is coming up!",
+          `
+          <h2>Next in Queue</h2>
+          <p>Hi Test Student,</p>
+          <p>You are next in the queue for your consultation!</p>
+          <p><strong>Time Slot:</strong> 10:30-11:00</p>
+          <p>Please be ready to join the meeting.</p>
+          <p>Join the meeting here: <a href="${testMeetLink}">${testMeetLink}</a></p>
+          <p>If you are not ready, please notify the faculty immediately.</p>
+          `
+        );
+        console.log(`✅ EMAIL CALLING FUNCTION EXECUTED for ${student_email_to_notify}`);
+      } catch (emailErr) {
+        console.error(`❌ ERROR in email function:`, emailErr instanceof Error ? emailErr.message : String(emailErr));
+        return res.status(500).json({ 
+          error: "Email function failed",
+          details: emailErr instanceof Error ? emailErr.message : String(emailErr)
+        });
+      }
+
+      res.json({
+        success: true,
+        message: "Test email triggered",
+        test_meet_link: testMeetLink,
+        recipient: student_email_to_notify,
+        current_consultation_id: currentConsult?.id,
+        next_consultation_id: nextConsult?.id,
+        instructions: "Check the console logs above for email sending details"
+      });
+
+    } catch (err: any) {
+      console.error("❌ Test endpoint error:", err?.message || err);
+      res.status(500).json({ error: err?.message || "Test endpoint error" });
+    }
+  });
+
   server.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on port ${PORT}`);
   });
@@ -4520,6 +4648,387 @@ async function startServer() {
 
   // Start the queue clear scheduler
   scheduleQueueClear();
+
+  // Schedule audit logs deletion every 48 hours
+  const scheduleAuditLogsDeletion = () => {
+    const deleteOldAuditLogs = async () => {
+      try {
+        const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+        
+        const { error } = await getSupabase()
+          .from("audit_logs")
+          .delete()
+          .lt("timestamp", fortyEightHoursAgo);
+        
+        if (error) {
+          console.error("Error deleting old audit logs:", error);
+        } else {
+          console.log(`Audit logs older than 48 hours deleted at ${new Date().toISOString()}`);
+        }
+      } catch (err) {
+        console.error("Unexpected error deleting audit logs:", err);
+      }
+    };
+
+    // Run immediately on server start
+    deleteOldAuditLogs();
+
+    // Then run every 48 hours
+    const intervalId = setInterval(() => {
+      deleteOldAuditLogs();
+    }, 48 * 60 * 60 * 1000); // 48 hours in milliseconds
+
+    console.log("Audit logs deletion scheduler started. Will run every 48 hours.");
+
+    // Make sure interval is cleaned up on process exit
+    process.on("exit", () => clearInterval(intervalId));
+  };
+
+  // Start the audit logs deletion scheduler
+  scheduleAuditLogsDeletion();
+
+  // ==========================================
+  // SCHEDULER: Send email 5 minutes before consultation
+  // ==========================================
+  const sentReminderEmails = new Set<string>(); // Track which consultations already got reminder emails
+
+  const scheduleConsultationReminders = () => {
+    const sendReminderEmails = async () => {
+      try {
+        // Get all waiting consultations with their faculty info
+        const { data: waitingConsultations, error: fetchError } = await getSupabase()
+          .from("queue")
+          .select("id, student_id, student_email, meet_link, faculty_id, students(full_name, email)")
+          .eq("status", "waiting");
+
+        if (fetchError) {
+          console.error("❌ Error fetching waiting consultations:", fetchError.message);
+          return;
+        }
+
+        if (!waitingConsultations || waitingConsultations.length === 0) {
+          return; // No consultations to process
+        }
+
+        const now = new Date();
+        const currentHours = now.getHours();
+        const currentMinutes = now.getMinutes();
+        const currentTotalMinutes = currentHours * 60 + currentMinutes;
+        
+        console.log(`⏰ [SCHEDULER] Current time: ${currentHours}:${String(currentMinutes).padStart(2, '0')} (${currentTotalMinutes} minutes)`);
+        console.log(`📋 [SCHEDULER] Found ${waitingConsultations.length} waiting consultations`);
+
+        for (const consultation of waitingConsultations) {
+          // Skip if we already sent a reminder for this consultation
+          if (sentReminderEmails.has(consultation.id)) {
+            continue;
+          }
+
+          const studentEmail = consultation.student_email || (consultation as any)?.students?.email;
+          const studentName = (consultation as any)?.students?.full_name || "Student";
+          const facultyId = consultation.faculty_id;
+
+          console.log(`\n📌 Checking consultation ${consultation.id}:`);
+          console.log(`   Student: ${studentName} (${studentEmail})`);
+          console.log(`   Meet Link: ${consultation.meet_link ? "YES" : "NO"}`);
+
+          // Parse meet_link: format is "HH:MM-HH:MM|https://meet.google.com/xxx"
+          if (!consultation.meet_link) {
+            console.log(`   ⏭️ Skipping - NO meet link`);
+            continue;
+          }
+
+          const parts = consultation.meet_link.split('|');
+          const timePart = parts[0]; // e.g., "18:30-18:45"
+          let meetLink = parts.length > 1 ? parts[1] : null; // e.g., "https://meet.google.com/xxx"
+
+          console.log(`   Time slot: ${timePart}`);
+          console.log(`   Meet link: ${meetLink ? "YES" : "NO"}`);
+
+          // If no meet link found, try to generate it now
+          if (!meetLink) {
+            console.log(`   🔄 [RETRY] Attempting to generate meet link...`);
+            try {
+              const generatedLink = await createGoogleMeetLink(facultyId);
+              if (generatedLink) {
+                meetLink = generatedLink;
+                console.log(`   ✅ [RETRY] Generated: ${meetLink}`);
+                
+                // Update the consultation with the generated link
+                const updatedMeetLink = `${timePart}|${generatedLink}`;
+                await getSupabase()
+                  .from("queue")
+                  .update({ meet_link: updatedMeetLink })
+                  .eq("id", consultation.id);
+                console.log(`   ✅ [RETRY] Updated queue entry with meet link`);
+              } else {
+                console.log(`   ❌ [RETRY] Generated link is empty`);
+              }
+            } catch (retryErr) {
+              console.error(`   ❌ [RETRY] Failed:`, retryErr instanceof Error ? retryErr.message : String(retryErr));
+            }
+          }
+
+          if (!timePart || !meetLink) {
+            console.log(`   ⏭️ Skipping - missing time period or meet link`);
+            continue;
+          }
+
+          // Parse start time from timePart
+          // Format: "Saturday 05:00 AM - 05:15 AM" or "18:30-18:45"
+          console.log(`   Time parsing: timePart="${timePart}"`);
+          
+          let startHour = -1;
+          let startMin = -1;
+          
+          // Try format: "Day HH:MM AM/PM - ..."
+          if (timePart.includes('AM') || timePart.includes('PM')) {
+            // Extract "HH:MM AM/PM" part
+            const match = timePart.match(/(\d{1,2}):(\d{2})\s(AM|PM)/i);
+            if (match) {
+              let hour = parseInt(match[1], 10);
+              const min = parseInt(match[2], 10);
+              const meridiem = match[3].toUpperCase();
+              
+              // Convert to 24-hour format
+              if (meridiem === 'PM' && hour !== 12) {
+                hour += 12;
+              } else if (meridiem === 'AM' && hour === 12) {
+                hour = 0;
+              }
+              
+              startHour = hour;
+              startMin = min;
+              console.log(`   Parsed (12-hour): "${match[0]}" → ${startHour}:${String(startMin).padStart(2, '0')} (24-hour)`);
+            }
+          } else {
+            // Try format: "HH:MM-HH:MM"
+            const timeMatch = timePart.split('-')[0].trim();
+            const [hourStr, minStr] = timeMatch.split(':');
+            startHour = parseInt(hourStr, 10);
+            startMin = parseInt(minStr, 10);
+            console.log(`   Parsed (24-hour): "${timeMatch}" → ${startHour}:${String(startMin).padStart(2, '0')}`);
+          }
+
+          if (isNaN(startHour) || isNaN(startMin) || startHour < 0 || startMin < 0) {
+            console.log(`   ⏭️ Skipping - could not parse time: "${timePart}"`);
+            continue;
+          }
+
+          const consultationStartMinutes = startHour * 60 + startMin;
+          const minutesUntilStart = consultationStartMinutes - currentTotalMinutes;
+
+          console.log(`   Start time: ${startHour}:${String(startMin).padStart(2, '0')} (${consultationStartMinutes} minutes)`);
+          console.log(`   Minutes until start: ${minutesUntilStart}`);
+
+          // Send email if consultation starts within next 5-7 minutes (window to account for scheduler timing)
+          if (minutesUntilStart > 0 && minutesUntilStart <= 7) {
+            console.log(`   ✅ SENDING EMAIL NOW!`);
+            try {
+              if (studentEmail) {
+                console.log(`   📧 Sending to ${studentEmail}...`);
+                sendEmailNotification(
+                  studentEmail,
+                  `Your consultation is starting in ${minutesUntilStart} minutes!`,
+                  `
+                  <h2>Consultation Reminder</h2>
+                  <p>Hi ${studentName},</p>
+                  <p><strong>Your consultation is starting in ${minutesUntilStart} minutes!</strong></p>
+                  <p><strong>Time:</strong> ${timePart}</p>
+                  <p>Please be ready to join the meeting.</p>
+                  <p><strong>Join here:</strong> <a href="${meetLink}">${meetLink}</a></p>
+                  <p>If you are not ready or need to reschedule, please contact the faculty immediately.</p>
+                  `
+                );
+
+                // Mark as sent
+                sentReminderEmails.add(consultation.id);
+                console.log(`   ✅ Email queued for sending (via SendGrid)`);
+
+                // Broadcast notification to faculty for this consultation
+                console.log(`   🔔 Broadcasting to faculty ${facultyId}: student consultation starting`);
+                broadcast("consultation_starting_soon", {
+                  consultation_id: consultation.id,
+                  faculty_id: facultyId,
+                  student_name: studentName,
+                  student_email: studentEmail,
+                  time_slot: timePart,
+                  minutes_until_start: minutesUntilStart,
+                  meet_link: meetLink
+                });
+
+                // Log audit event
+                await logAudit("consultation_reminder_email_sent", {
+                  consultation_id: consultation.id,
+                  student_id: consultation.student_id,
+                  student_email: studentEmail,
+                  faculty_id: facultyId,
+                  minutes_before_start: minutesUntilStart,
+                  scheduled_start_time: timePart,
+                  meet_link: meetLink
+                });
+              } else {
+                console.log(`   ⏭️ No student email to send to`);
+              }
+            } catch (emailErr) {
+              console.error(`   ❌ Email error:`, emailErr instanceof Error ? emailErr.message : String(emailErr));
+            }
+          } else if (minutesUntilStart <= 0) {
+            console.log(`   ⏭️ Consultation already started (or in past)`);
+          } else {
+            console.log(`   ⏭️ Not yet in 5-minute window (${minutesUntilStart} minutes away)`);
+          }
+        }
+      } catch (err) {
+        console.error("❌ Error in consultation reminder scheduler:", err);
+      }
+    };
+
+    // Run immediately on server start
+    sendReminderEmails();
+
+    // Then run every 30 seconds to catch the 5-minute window
+    const intervalId = setInterval(() => {
+      sendReminderEmails();
+    }, 30 * 1000); // 30 seconds
+
+    console.log("📬 Consultation reminder email scheduler started (checks every 30 seconds)");
+    console.log("   ✅ Sends email 5 minutes before ANY waiting consultation");
+
+    // Make sure interval is cleaned up on process exit
+    process.on("exit", () => clearInterval(intervalId));
+  };
+
+  // Start the consultation reminder scheduler
+  scheduleConsultationReminders();
+
+  // ==========================================
+  // SCHEDULER: Auto-advance queue if student not ready after time passes
+  // ==========================================
+  const scheduleQueueAutoAdvance = () => {
+    const autoAdvanceQueue = async () => {
+      try {
+        // Get all waiting consultations
+        const { data: waitingConsultations, error: fetchError } = await getSupabase()
+          .from("queue")
+          .select("id, student_id, student_email, meet_link, faculty_id, students(full_name, email)")
+          .eq("status", "waiting");
+
+        if (fetchError) {
+          console.error("❌ Auto-advance error fetching consultations:", fetchError.message);
+          return;
+        }
+
+        if (!waitingConsultations || waitingConsultations.length === 0) {
+          return;
+        }
+
+        const now = new Date();
+        const currentHours = now.getHours();
+        const currentMinutes = now.getMinutes();
+        const currentTotalMinutes = currentHours * 60 + currentMinutes;
+
+        for (const consultation of waitingConsultations) {
+          if (!consultation.meet_link) continue;
+
+          const studentName = (consultation as any)?.students?.full_name || "Student";
+          const timePart = consultation.meet_link;
+
+          // Parse end time from timePart
+          // Format: "Saturday 05:00 AM - 05:15 AM" or "18:30-18:45"
+          let endHour = -1;
+          let endMin = -1;
+
+          // Try format: "... - HH:MM AM/PM"
+          if (timePart.includes('AM') || timePart.includes('PM')) {
+            const match = timePart.match(/(\d{1,2}):(\d{2})\s(AM|PM)\s*$/i);
+            if (match) {
+              let hour = parseInt(match[1], 10);
+              const min = parseInt(match[2], 10);
+              const meridiem = match[3].toUpperCase();
+
+              if (meridiem === 'PM' && hour !== 12) {
+                hour += 12;
+              } else if (meridiem === 'AM' && hour === 12) {
+                hour = 0;
+              }
+
+              endHour = hour;
+              endMin = min;
+            }
+          } else {
+            // Try format: "HH:MM-HH:MM" (extract end time)
+            const parts = timePart.split('-');
+            if (parts.length >= 2) {
+              const endTimeStr = parts[1].trim();
+              const [hourStr, minStr] = endTimeStr.split(':');
+              endHour = parseInt(hourStr, 10);
+              endMin = parseInt(minStr, 10);
+            }
+          }
+
+          if (isNaN(endHour) || isNaN(endMin) || endHour < 0 || endMin < 0) {
+            continue;
+          }
+
+          const endTotalMinutes = endHour * 60 + endMin;
+          const minutesPastEnd = currentTotalMinutes - endTotalMinutes;
+
+          // If time has passed and student hasn't started consultation
+          if (minutesPastEnd > 0) {
+            console.log(`\n⏰ [AUTO-ADVANCE] Consultation ${consultation.id} (${studentName}) ended ${minutesPastEnd} minutes ago`);
+            console.log(`   Status: waiting → cancelling (student not ready)`);
+
+            try {
+              // Mark as cancelled since student didn't show up in time
+              const { error: updateError } = await getSupabase()
+                .from("queue")
+                .update({ status: "done" })
+                .eq("id", consultation.id);
+
+              if (updateError) {
+                console.error(`   ❌ Failed to update:`, updateError.message);
+              } else {
+                console.log(`   ✅ Auto-cancelled expired consultation`);
+
+                // Log audit event
+                await logAudit("consultation_auto_cancelled", {
+                  consultation_id: consultation.id,
+                  student_id: consultation.student_id,
+                  student_name: studentName,
+                  reason: "student_not_ready_after_time_expired",
+                  minutes_past_end: minutesPastEnd,
+                  scheduled_time: timePart
+                });
+
+                // Broadcast to update UI
+                broadcast("queue_updated", { faculty_id: consultation.faculty_id });
+
+                console.log(`   📢 Queue updated - next student can now start`);
+              }
+            } catch (err) {
+              console.error(`   ❌ Error during auto-advance:`, err);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("❌ Error in queue auto-advance scheduler:", err);
+      }
+    };
+
+    // Run every 60 seconds to check if consultations have expired
+    const intervalId = setInterval(() => {
+      autoAdvanceQueue();
+    }, 60 * 1000); // 60 seconds
+
+    console.log("⏰ Queue auto-advance scheduler started (checks every 60 seconds)");
+    console.log("   ✅ Auto-cancels waiting consultations if time has passed");
+
+    process.on("exit", () => clearInterval(intervalId));
+  };
+
+  // Start the queue auto-advance scheduler
+  scheduleQueueAutoAdvance();
 }
 
 startServer();

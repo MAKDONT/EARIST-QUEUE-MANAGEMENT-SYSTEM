@@ -87,7 +87,62 @@ export default function FacultyDashboard() {
     navigate("/staff/login");
   };
 
+  const playNotificationSound = (data: any) => {
+    // Create audio context for notification sound
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const bufferLength = audioContext.sampleRate * 2; // 2 seconds
+    const buffer = audioContext.createBuffer(1, bufferLength, audioContext.sampleRate);
+    const data_array = buffer.getChannelData(0);
+
+    // Generate beep pattern: 3 short beeps
+    const beepDuration = audioContext.sampleRate * 0.2; // 200ms per beep
+    const silence = audioContext.sampleRate * 0.1; // 100ms silence
+
+    let pos = 0;
+    const freq = 1000; // 1000Hz frequency
+
+    // Generate 3 beeps
+    for (let i = 0; i < 3; i++) {
+      // Beep sound
+      for (let j = 0; j < beepDuration; j++) {
+        data_array[pos++] = Math.sin((2 * Math.PI * freq * j) / audioContext.sampleRate) * 0.3;
+      }
+      // Silence
+      for (let j = 0; j < silence; j++) {
+        data_array[pos++] = 0;
+      }
+    }
+
+    // Play the buffer
+    const source = audioContext.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioContext.destination);
+    source.start(0);
+
+    // Show visual notification
+    console.log("🔔 Consultation starting notification!");
+    console.log(
+      `   Student: ${data.student_name}`,
+      `\n   Time: ${data.time_slot}`,
+      `\n   In ${data.minutes_until_start} minutes`
+    );
+
+    // Optional: Show browser notification if permission granted
+    if ("Notification" in window && Notification.permission === "granted") {
+      new Notification("Consultation Starting Soon! 🔔", {
+        body: `${data.student_name} - ${data.time_slot}`,
+        tag: `consultation-${data.consultation_id}`,
+        requireInteraction: true
+      });
+    }
+  };
+
   useEffect(() => {
+    // Request notification permission
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
     const staffUserId = getStaffSessionUserId();
     if (!staffUserId) {
       navigate("/staff/login");
@@ -118,12 +173,21 @@ export default function FacultyDashboard() {
       };
       
       ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.type === "queue_updated") {
-          fetchQueue();
-        }
-        if (data.type === "faculty_updated") {
-          fetchFaculty();
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === "queue_updated") {
+            fetchQueue();
+          }
+          if (data.type === "faculty_updated") {
+            fetchFaculty();
+          }
+          if (data.type === "consultation_starting_soon" && data.faculty_id === selectedFaculty) {
+            console.log("📢 Consultation starting soon notification:", data);
+            // Play notification sound
+            playNotificationSound(data);
+          }
+        } catch (err) {
+          console.error("Faculty WS message parse error", err);
         }
       };
 

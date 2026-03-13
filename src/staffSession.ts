@@ -1,14 +1,16 @@
+import { safeGetItem } from "./utils/storageUtils";
+
 const STAFF_ROLE_KEY = "staff_user_role";
 const STAFF_ID_KEY = "staff_user_id";
 const LEGACY_ROLE_KEY = "user_role";
 const LEGACY_ID_KEY = "user_id";
 
 const migrateLegacyStaffSession = () => {
-  if (localStorage.getItem(LEGACY_ROLE_KEY) !== "staff") {
+  if (safeGetItem(LEGACY_ROLE_KEY) !== "staff") {
     return;
   }
 
-  const legacyId = localStorage.getItem(LEGACY_ID_KEY);
+  const legacyId = safeGetItem(LEGACY_ID_KEY);
   if (legacyId) {
     sessionStorage.setItem(STAFF_ROLE_KEY, "staff");
     sessionStorage.setItem(STAFF_ID_KEY, legacyId);
@@ -39,7 +41,7 @@ export const clearStaffSession = () => {
   sessionStorage.removeItem(STAFF_ROLE_KEY);
   sessionStorage.removeItem(STAFF_ID_KEY);
 
-  if (localStorage.getItem(LEGACY_ROLE_KEY) === "staff") {
+  if (safeGetItem(LEGACY_ROLE_KEY) === "staff") {
     localStorage.removeItem(LEGACY_ROLE_KEY);
     localStorage.removeItem(LEGACY_ID_KEY);
   }

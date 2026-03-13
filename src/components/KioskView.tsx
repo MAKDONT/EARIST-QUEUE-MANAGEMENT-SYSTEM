@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { User, Users, CheckCircle, AlertCircle, Clock, ArrowLeft, Calendar, ChevronRight, ChevronDown, ChevronUp } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { safeGetItem } from "../utils/storageUtils";
 
 interface Faculty {
   id: string;
@@ -21,10 +22,10 @@ export default function KioskView() {
   const [faculty, setFaculty] = useState<Faculty[]>([]);
   
   // Form State from localStorage
-  const studentId = localStorage.getItem("student_id") || "";
-  const studentName = localStorage.getItem("student_name") || "";
-  const studentEmail = localStorage.getItem("student_email") || "";
-  const course = localStorage.getItem("student_course") || "";
+  const studentId = safeGetItem("student_id", "");
+  const studentName = safeGetItem("student_name", "");
+  const studentEmail = safeGetItem("student_email", "");
+  const course = safeGetItem("student_course", "");
   
   const [selectedFaculty, setSelectedFaculty] = useState<string | null>(null);
   const [expandedFaculty, setExpandedFaculty] = useState<string | null>(null);
@@ -49,10 +50,14 @@ export default function KioskView() {
     const ws = new WebSocket(`${protocol}//${window.location.host}`);
     
     ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === "faculty_updated" || data.type === "queue_updated") {
-        fetchFaculty();
-        fetchBookedSlots();
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "faculty_updated" || data.type === "queue_updated") {
+          fetchFaculty();
+          fetchBookedSlots();
+        }
+      } catch (err) {
+        console.error("Kiosk WS message parse error", err);
       }
     };
 

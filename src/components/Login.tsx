@@ -66,11 +66,23 @@ export default function Login() {
     const ws = new WebSocket(`${protocol}//${window.location.host}`);
     
     ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === "faculty_updated" || data.type === "queue_updated") {
-        fetchFaculty();
-        fetchLiveQueue(1, true);
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "faculty_updated" || data.type === "queue_updated") {
+          fetchFaculty();
+          fetchLiveQueue(1, true);
+        }
+      } catch (err) {
+        console.error("Login WS message parse error", err);
       }
+    };
+
+    ws.onerror = (error) => {
+      console.error("WebSocket error:", error);
+    };
+
+    ws.onclose = () => {
+      console.warn("WebSocket connection closed");
     };
 
     const interval = setInterval(() => {

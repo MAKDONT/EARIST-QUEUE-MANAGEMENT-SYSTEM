@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, LogIn, Shield, KeyRound, Mail, Eye, EyeOff } from "lucide-react";
+import { safeGetItem } from "../utils/storageUtils";
 
 export default function AdminLogin() {
   const navigate = useNavigate();
@@ -18,7 +19,7 @@ export default function AdminLogin() {
   const oauthWindowRef = useRef<Window | null>(null);
 
   useEffect(() => {
-    if (localStorage.getItem("user_role") === "admin") {
+    if (safeGetItem("user_role") === "admin") {
       navigate("/admin/dashboard");
     }
   }, [navigate]);

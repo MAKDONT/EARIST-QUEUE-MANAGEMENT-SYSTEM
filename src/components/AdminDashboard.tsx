@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Shield, LogOut, Plus, Building, UserPlus, ArrowLeft, Trash2, KeyRound, AlertTriangle, Users, FolderOpen, RefreshCw, Search, FileAudio, ExternalLink, Download, Mail, Eye, EyeOff } from "lucide-react";
+import { safeGetItem, safeClearStorage } from "../utils/storageUtils";
 
 interface LiveQueueItem {
   id: number;
@@ -151,7 +152,7 @@ export default function AdminDashboard() {
   const [facultySearch, setFacultySearch] = useState("");
 
   useEffect(() => {
-    if (localStorage.getItem("user_role") !== "admin") {
+    if (safeGetItem("user_role") !== "admin") {
       navigate("/admin/login");
       return;
     }
@@ -162,7 +163,7 @@ export default function AdminDashboard() {
     void checkRecordingStorageStatus();
     fetchLiveQueue();
     fetchAdminEmail();
-  }, [navigate]);
+  }, []);
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -177,7 +178,7 @@ export default function AdminDashboard() {
   }, []);
 
   useEffect(() => {
-    if (localStorage.getItem("user_role") !== "admin") return;
+    if (safeGetItem("user_role") !== "admin") return;
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const ws = new WebSocket(`${protocol}//${window.location.host}`);
@@ -197,6 +198,14 @@ export default function AdminDashboard() {
       }
     };
 
+    ws.onerror = (error) => {
+      console.error("WebSocket error:", error);
+    };
+
+    ws.onclose = () => {
+      console.warn("WebSocket connection closed");
+    };
+
     const interval = setInterval(() => {
       fetchLiveQueue(1, true);
     }, 15000);
@@ -208,7 +217,7 @@ export default function AdminDashboard() {
   }, []);
 
   useEffect(() => {
-    if (localStorage.getItem("user_role") !== "admin") return;
+    if (safeGetItem("user_role") !== "admin") return;
 
     if (!recordingStorageReady) {
       setDriveRecordings([]);
@@ -223,6 +232,9 @@ export default function AdminDashboard() {
   const checkDriveStatus = async () => {
     try {
       const res = await fetch(`/api/drive/status`);
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
       const data = await res.json();
       setDriveConnected(data.driveConnected ?? data.connected);
       setDriveMode(data.driveMode || data.mode || "none");
@@ -233,7 +245,7 @@ export default function AdminDashboard() {
       setOauthExpiresAt(typeof data.oauthExpiresAt === "string" ? data.oauthExpiresAt : null);
       setTokenMaxAgeDays(typeof data.tokenMaxAgeDays === "number" ? data.tokenMaxAgeDays : 30);
     } catch (err) {
-      console.error("Failed to check drive status", err);
+      console.error("Failed to check drive status", err instanceof Error ? err.message : String(err));
     }
   };
 
