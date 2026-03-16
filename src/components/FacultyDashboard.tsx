@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Users, CheckCircle, Video, XCircle, ChevronRight, Clock, ArrowLeft, LogOut } from "lucide-react";
+import { apiFetch, getWebSocketUrl } from "../lib/api";
 
 interface Consultation {
   id: number;
@@ -41,8 +42,7 @@ export default function FacultyDashboard() {
     if (selectedFaculty) {
       fetchQueue();
       // Setup WebSocket for real-time updates
-      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const ws = new WebSocket(`${protocol}//${window.location.host}`);
+      const ws = new WebSocket(getWebSocketUrl());
       
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
@@ -60,7 +60,7 @@ export default function FacultyDashboard() {
 
   const fetchFaculty = async (retries = 3) => {
     try {
-      const res = await fetch("/api/faculty");
+      const res = await apiFetch("/api/faculty");
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       if (Array.isArray(data)) {
@@ -78,7 +78,7 @@ export default function FacultyDashboard() {
 
   const fetchQueue = async (retries = 3) => {
     try {
-      const res = await fetch(`/api/faculty/${selectedFaculty}/queue`);
+      const res = await apiFetch(`/api/faculty/${selectedFaculty}/queue`);
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       if (Array.isArray(data)) {
@@ -103,7 +103,7 @@ export default function FacultyDashboard() {
   useEffect(() => {
     const checkDriveStatus = async () => {
       try {
-        const res = await fetch(`/api/drive/status`);
+        const res = await apiFetch(`/api/drive/status`);
         const data = await res.json();
         setDriveConnected(data.connected);
       } catch (err) {
@@ -123,7 +123,7 @@ export default function FacultyDashboard() {
       formData.append('faculty_id', selectedFaculty!.toString());
       
       try {
-        const res = await fetch('/api/drive/upload', {
+        const res = await apiFetch('/api/drive/upload', {
           method: 'POST',
           body: formData
         });
@@ -203,7 +203,7 @@ export default function FacultyDashboard() {
 
   const updateStatus = async (id: number, status: string, link?: string, autoCallNext: boolean = false) => {
     try {
-      const res = await fetch(`/api/queue/${id}/status`, {
+      const res = await apiFetch(`/api/queue/${id}/status`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status, meet_link: link }),
@@ -225,7 +225,7 @@ export default function FacultyDashboard() {
         if (!alreadyNext) {
           const nextStudent = queue.find(s => s.status === "waiting" && s.id !== id);
           if (nextStudent) {
-            await fetch(`/api/queue/${nextStudent.id}/status`, {
+            await apiFetch(`/api/queue/${nextStudent.id}/status`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ status: "next" }),
@@ -266,7 +266,7 @@ export default function FacultyDashboard() {
     if (!selectedFacultyData) return;
     const newStatus = selectedFacultyData.status === 'available' ? 'offline' : 'available';
     try {
-      await fetch(`/api/faculty/${selectedFaculty}/status`, {
+      await apiFetch(`/api/faculty/${selectedFaculty}/status`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),
@@ -294,7 +294,7 @@ export default function FacultyDashboard() {
 
   const saveAvailability = async () => {
     try {
-      await fetch(`/api/faculty/${selectedFaculty}/availability`, {
+      await apiFetch(`/api/faculty/${selectedFaculty}/availability`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ availability: availabilitySlots }),

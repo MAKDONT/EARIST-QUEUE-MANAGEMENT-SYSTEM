@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { User, Users, CheckCircle, AlertCircle, Clock, ArrowLeft, Calendar, ChevronRight, ChevronDown, ChevronUp } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { apiFetch, getWebSocketUrl } from "../lib/api";
 
 interface Faculty {
   id: string;
@@ -38,8 +39,7 @@ export default function KioskView() {
     fetchFaculty();
     fetchBookedSlots();
     
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(`${protocol}//${window.location.host}`);
+    const ws = new WebSocket(getWebSocketUrl());
     
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
@@ -54,7 +54,7 @@ export default function KioskView() {
 
   const fetchBookedSlots = async (retries = 3) => {
     try {
-      const res = await fetch("/api/queue/booked-slots");
+      const res = await apiFetch("/api/queue/booked-slots");
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       if (Array.isArray(data)) {
@@ -71,7 +71,7 @@ export default function KioskView() {
   const fetchFaculty = async (retries = 3) => {
     setFetching(true);
     try {
-      const res = await fetch("/api/faculty");
+      const res = await apiFetch("/api/faculty");
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       if (Array.isArray(data)) {
@@ -173,7 +173,7 @@ export default function KioskView() {
     setError("");
 
     try {
-      const res = await fetch("/api/queue/join", {
+      const res = await apiFetch("/api/queue/join", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

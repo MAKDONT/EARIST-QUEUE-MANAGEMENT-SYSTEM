@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Shield, LogOut, Plus, Building, UserPlus, ArrowLeft, Trash2, KeyRound, AlertTriangle } from "lucide-react";
+import { apiFetch, buildApiUrl } from "../lib/api";
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -59,7 +60,7 @@ export default function AdminDashboard() {
 
   const checkDriveStatus = async () => {
     try {
-      const res = await fetch(`/api/drive/status`);
+      const res = await apiFetch(`/api/drive/status`);
       const data = await res.json();
       setDriveConnected(data.connected);
     } catch (err) {
@@ -69,8 +70,8 @@ export default function AdminDashboard() {
 
   const handleConnectDrive = async () => {
     try {
-      const redirectUri = `${window.location.origin}/api/auth/google/callback`;
-      const response = await fetch(`/api/auth/google/url?redirect_uri=${encodeURIComponent(redirectUri)}`);
+      const redirectUri = buildApiUrl("/api/auth/google/callback");
+      const response = await apiFetch(`/api/auth/google/url?redirect_uri=${encodeURIComponent(redirectUri)}`);
       if (!response.ok) throw new Error('Failed to get auth URL');
       const { url } = await response.json();
       
@@ -88,7 +89,7 @@ export default function AdminDashboard() {
     if (!confirm("Are you sure you want to disconnect Google Drive? New recordings will not be uploaded until you reconnect.")) return;
     
     try {
-      const res = await fetch("/api/drive/disconnect", { method: "POST" });
+      const res = await apiFetch("/api/drive/disconnect", { method: "POST" });
       if (!res.ok) throw new Error("Failed to disconnect");
       setDriveConnected(false);
       alert("Google Drive disconnected successfully.");
@@ -100,7 +101,7 @@ export default function AdminDashboard() {
 
   const fetchFaculties = async (retries = 3) => {
     try {
-      const res = await fetch("/api/faculty");
+      const res = await apiFetch("/api/faculty");
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       if (Array.isArray(data)) {
@@ -116,7 +117,7 @@ export default function AdminDashboard() {
 
   const fetchColleges = async (retries = 3) => {
     try {
-      const res = await fetch("/api/colleges");
+      const res = await apiFetch("/api/colleges");
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       if (Array.isArray(data)) {
@@ -135,7 +136,7 @@ export default function AdminDashboard() {
 
   const fetchDepartments = async (retries = 3) => {
     try {
-      const res = await fetch("/api/departments");
+      const res = await apiFetch("/api/departments");
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       if (Array.isArray(data)) {
@@ -164,7 +165,7 @@ export default function AdminDashboard() {
 
     setAddingCollege(true);
     try {
-      const res = await fetch("/api/colleges", {
+      const res = await apiFetch("/api/colleges", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: collegeName.trim(), code: collegeCode.trim() }),
@@ -202,7 +203,7 @@ export default function AdminDashboard() {
 
     setAddingDept(true);
     try {
-      const res = await fetch("/api/departments", {
+      const res = await apiFetch("/api/departments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: deptName.trim(), code: deptCode.trim(), college_id: collegeId }),
@@ -256,7 +257,7 @@ export default function AdminDashboard() {
     setAddingFac(true);
     try {
       const id = crypto.randomUUID();
-      const res = await fetch("/api/faculty", {
+      const res = await apiFetch("/api/faculty", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -290,7 +291,7 @@ export default function AdminDashboard() {
 
   const handleDeleteCollege = async () => {
     try {
-      const res = await fetch(`/api/colleges/${deleteCollegeModal.id}`, { method: "DELETE" });
+      const res = await apiFetch(`/api/colleges/${deleteCollegeModal.id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete college");
       fetchColleges();
       setDeleteCollegeModal({ isOpen: false, id: "", name: "" });
@@ -301,7 +302,7 @@ export default function AdminDashboard() {
 
   const handleDeleteFaculty = async () => {
     try {
-      const res = await fetch(`/api/faculty/${deleteFacultyModal.id}`, { method: "DELETE" });
+      const res = await apiFetch(`/api/faculty/${deleteFacultyModal.id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete faculty");
       fetchFaculties();
       setDeleteFacultyModal({ isOpen: false, id: "", name: "" });
@@ -312,7 +313,7 @@ export default function AdminDashboard() {
 
   const handleResetPassword = async () => {
     try {
-      const res = await fetch(`/api/faculty/${resetPasswordModal.id}/reset-password`, {
+      const res = await apiFetch(`/api/faculty/${resetPasswordModal.id}/reset-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: "earist2024" })
@@ -374,7 +375,7 @@ export default function AdminDashboard() {
           </div>
           <button
             onClick={async () => {
-              const res = await fetch('/api/test/make-all-available');
+              const res = await apiFetch('/api/test/make-all-available');
               const data = await res.json();
               alert('Updated: ' + JSON.stringify(data));
               fetchFaculties();

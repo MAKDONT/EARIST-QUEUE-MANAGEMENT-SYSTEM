@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Users, Shield, GraduationCap, LogIn, ScanLine, Keyboard, Clock } from "lucide-react";
+import { apiFetch, getWebSocketUrl } from "../lib/api";
 
 type Role = "student" | "staff" | "admin";
 
@@ -42,8 +43,7 @@ export default function Login() {
     fetchFaculty();
     fetchDepartments();
     
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(`${protocol}//${window.location.host}`);
+    const ws = new WebSocket(getWebSocketUrl());
     
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
@@ -57,7 +57,7 @@ export default function Login() {
 
   const fetchFaculty = async (retries = 3) => {
     try {
-      const res = await fetch("/api/faculty");
+      const res = await apiFetch("/api/faculty");
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       if (Array.isArray(data)) {
@@ -73,7 +73,7 @@ export default function Login() {
 
   const fetchDepartments = async (retries = 3) => {
     try {
-      const res = await fetch("/api/departments");
+      const res = await apiFetch("/api/departments");
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       if (Array.isArray(data)) {
@@ -120,7 +120,7 @@ export default function Login() {
 
     try {
       if (role === "admin") {
-        const adminRes = await fetch("/api/admin/password");
+        const adminRes = await apiFetch("/api/admin/password");
         const adminData = await adminRes.json();
         const adminPass = adminData.password || "EARIST";
         
@@ -131,7 +131,7 @@ export default function Login() {
           throw new Error("Invalid admin password");
         }
       } else if (role === "staff") {
-        const res = await fetch("/api/faculty/login", {
+        const res = await apiFetch("/api/faculty/login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email: identifier, password }),
@@ -145,7 +145,7 @@ export default function Login() {
       } else if (role === "student") {
         if (inputMode === "scan") {
           // Check if student exists
-          const res = await fetch(`/api/students/${identifier}`);
+          const res = await apiFetch(`/api/students/${identifier}`);
           if (!res.ok) {
             throw new Error("Student not found in database. Please use Manual Input.");
           }
@@ -168,7 +168,7 @@ export default function Login() {
         localStorage.setItem("user_role", "student");
         
         // Check for active queue
-        const queueRes = await fetch(`/api/student/${identifier}/active-queue`);
+        const queueRes = await apiFetch(`/api/student/${identifier}/active-queue`);
         const queueData = await queueRes.json();
         
         if (queueRes.ok && queueData.id) {
