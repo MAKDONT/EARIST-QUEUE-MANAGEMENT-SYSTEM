@@ -1423,16 +1423,25 @@ export default function AdminDashboard() {
           ) : (
             <>
               <div className="flex flex-col lg:flex-row gap-3">
-                <label className="relative flex-1">
-                  <Search className="w-4 h-4 text-neutral-400 absolute left-4 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={driveRecordingsSearch}
-                    onChange={(e) => setDriveRecordingsSearch(e.target.value)}
-                    placeholder="Search recordings by file name, faculty, or student"
-                    className="w-full pl-11 pr-4 py-3 border border-neutral-200 rounded-2xl bg-neutral-50 focus:border-amber-500 focus:ring-0 outline-none transition-colors"
-                  />
-                </label>
+              <div className="flex items-center gap-2 bg-white rounded-2xl shadow-md p-4 border border-neutral-200 flex-1">
+                <Search className="w-5 h-5 text-neutral-400 flex-shrink-0" />
+                <input
+                  type="text"
+                  value={driveRecordingsSearch}
+                  onChange={(e) => setDriveRecordingsSearch(e.target.value)}
+                  placeholder="Search recordings by file name, faculty, or student"
+                  className="flex-1 p-2 bg-transparent outline-none text-neutral-900 placeholder-neutral-400"
+                />
+                {driveRecordingsSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setDriveRecordingsSearch("")}
+                    className="px-3 py-1 text-sm bg-neutral-100 hover:bg-neutral-200 text-neutral-600 rounded-lg transition-colors flex-shrink-0"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
                 <div className="px-4 py-3 rounded-2xl bg-neutral-50 border border-neutral-200 text-sm text-neutral-600">
                   Showing {filteredDriveRecordings.length} of {driveRecordings.length} recordings
                 </div>
@@ -1638,9 +1647,9 @@ export default function AdminDashboard() {
             <button
               type="submit"
               disabled={addingCollege || !collegeName || !collegeCode}
-              className="w-full flex items-center justify-center gap-2 py-4 px-4 bg-purple-600 hover:bg-purple-700 disabled:bg-neutral-300 disabled:cursor-not-allowed text-white text-lg font-bold rounded-2xl shadow-lg transition-all active:scale-95"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-purple-100 hover:bg-purple-200 disabled:bg-neutral-100 disabled:cursor-not-allowed text-purple-800 font-medium rounded-xl transition-colors"
             >
-              <Plus className="w-5 h-5" />
+              <Plus className="w-4 h-4" />
               {addingCollege ? "Adding..." : "Add College"}
             </button>
           </form>
@@ -1758,9 +1767,9 @@ export default function AdminDashboard() {
             <button
               type="submit"
               disabled={addingDept || !deptName || !deptCode || !collegeId}
-              className="w-full flex items-center justify-center gap-2 py-4 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-neutral-300 disabled:cursor-not-allowed text-white text-lg font-bold rounded-2xl shadow-lg transition-all active:scale-95"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-100 hover:bg-blue-200 disabled:bg-neutral-100 disabled:cursor-not-allowed text-blue-800 font-medium rounded-xl transition-colors"
             >
-              <Plus className="w-5 h-5" />
+              <Plus className="w-4 h-4" />
               {addingDept ? "Adding..." : "Add Department"}
             </button>
           </form>
@@ -1915,9 +1924,9 @@ export default function AdminDashboard() {
             <button
               type="submit"
               disabled={addingFac || !facName || !facCollege || !facDept || !facEmail || !facPassword}
-              className="w-full flex items-center justify-center gap-2 py-4 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-neutral-300 disabled:cursor-not-allowed text-white text-lg font-bold rounded-2xl shadow-lg transition-all active:scale-95"
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-emerald-100 hover:bg-emerald-200 disabled:bg-neutral-100 disabled:cursor-not-allowed text-emerald-800 font-medium rounded-xl transition-colors"
             >
-              <Plus className="w-5 h-5" />
+              <Plus className="w-4 h-4" />
               {addingFac ? "Adding..." : "Add Faculty"}
             </button>
           </form>
