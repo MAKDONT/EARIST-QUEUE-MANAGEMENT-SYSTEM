@@ -148,16 +148,17 @@ export default function AdminLogin() {
 
   if (resetSuccess) {
     return (
-      <div className="min-h-screen bg-neutral-100 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 space-y-6 text-center">
-          <div className="inline-flex p-3 bg-emerald-100 rounded-2xl">
-            <KeyRound className="w-7 h-7 text-emerald-700" />
+      <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'var(--clay-bg-primary)' }}>
+        <div className="max-w-md w-full rounded-3xl shadow-xl p-8 space-y-6 text-center" style={{ background: 'var(--clay-bg-secondary)', boxShadow: '0 4px 20px var(--clay-shadow-soft)' }}>        
+          <div className="inline-flex p-3 rounded-2xl" style={{ background: 'rgba(168, 213, 186, 0.2)' }}>
+            <KeyRound className="w-7 h-7" style={{ color: 'var(--clay-accent-sage)' }} />
           </div>
-          <h1 className="text-2xl font-bold text-neutral-900">Password Reset Successful</h1>
-          <p className="text-neutral-500">Your admin password has been updated. You can now sign in with your new password.</p>
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--clay-text-primary)' }}>Password Reset Successful</h1>
+          <p style={{ color: 'var(--clay-text-secondary)' }}>Your admin password has been updated. You can now sign in with your new password.</p>
           <button
             onClick={() => { setView("login"); setResetSuccess(false); setNewPassword(""); setConfirmPassword(""); setError(""); }}
-            className="w-full py-4 px-4 bg-red-600 hover:bg-red-700 text-white text-lg font-bold rounded-2xl transition-colors"
+            className="w-full py-4 px-4 text-white text-lg font-bold rounded-2xl transition-colors"
+            style={{ background: 'var(--clay-accent-warm)', borderColor: 'var(--clay-accent-warm)' }}
           >
             Go to Login
           </button>
@@ -168,66 +169,66 @@ export default function AdminLogin() {
 
   if (view === "reset_form") {
     return (
-      <div className="min-h-screen bg-neutral-100 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 space-y-8">
+      <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'var(--clay-bg-primary)' }}>
+        <div className="max-w-md w-full rounded-3xl shadow-xl p-8 space-y-8" style={{ background: 'var(--clay-bg-secondary)', boxShadow: '0 4px 20px var(--clay-shadow-soft)' }}>
           <button
             onClick={() => { setView("login"); setError(""); }}
-            className="inline-flex items-center gap-2 text-neutral-500 hover:text-neutral-800 transition-colors"
+            className="inline-flex items-center gap-2 transition-colors" style={{ color: 'var(--clay-text-secondary)' }}
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Login
           </button>
 
           <div className="text-center space-y-2">
-            <div className="inline-flex p-3 bg-amber-100 rounded-2xl">
-              <KeyRound className="w-7 h-7 text-amber-700" />
+            <div className="inline-flex p-3 rounded-2xl" style={{ background: 'rgba(212, 165, 116, 0.2)' }}>
+              <KeyRound className="w-7 h-7" style={{ color: 'var(--clay-accent-warm)' }} />
             </div>
-            <h1 className="text-3xl font-bold text-neutral-900 tracking-tight">Set New Password</h1>
-            <p className="text-neutral-500">Verified as <span className="font-semibold text-neutral-700">{resetEmail}</span></p>
+            <h1 className="text-3xl font-bold tracking-tight" style={{ color: 'var(--clay-text-primary)' }}>Set New Password</h1>
+            <p style={{ color: 'var(--clay-text-secondary)' }}>Verified as <span className="font-semibold" style={{ color: 'var(--clay-text-primary)' }}>{resetEmail}</span></p>
           </div>
 
           <form onSubmit={handleResetPassword} className="space-y-5">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-neutral-700 block">New Password</label>
+              <label className="text-sm font-medium block" style={{ color: 'var(--clay-text-primary)' }}>New Password</label>
               <div className="relative">
                 <input
                   type={showNewPassword ? "text" : "password"}
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="Enter new password (min 6 chars)"
-                  className="w-full p-4 pr-12 border-2 border-neutral-200 rounded-2xl bg-neutral-50 focus:border-amber-500 focus:ring-0 outline-none transition-colors"
+                  className="w-full p-4 pr-12 rounded-2xl focus:ring-0 outline-none transition-colors" style={{ borderColor: 'var(--clay-border)', borderWidth: '2px', background: 'var(--clay-bg-secondary)' }}
                   required
                   minLength={6}
                 />
-                <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600">
+                <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="absolute right-4 top-1/2 -translate-y-1/2" style={{ color: 'var(--clay-text-secondary)' }}>
                   {showNewPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-neutral-700 block">Confirm Password</label>
+              <label className="text-sm font-medium block" style={{ color: 'var(--clay-text-primary)' }}>Confirm Password</label>
               <div className="relative">
                 <input
                   type={showConfirmPassword ? "text" : "password"}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Confirm new password"
-                  className="w-full p-4 pr-12 border-2 border-neutral-200 rounded-2xl bg-neutral-50 focus:border-amber-500 focus:ring-0 outline-none transition-colors"
+                  className="w-full p-4 pr-12 rounded-2xl focus:ring-0 outline-none transition-colors" style={{ borderColor: 'var(--clay-border)', borderWidth: '2px', background: 'var(--clay-bg-secondary)' }}
                   required
                   minLength={6}
                 />
-                <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600">
+                <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-4 top-1/2 -translate-y-1/2" style={{ color: 'var(--clay-text-secondary)' }}>
                   {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
             </div>
 
-            {error && <p className="text-red-600 text-sm">{error}</p>}
+            {error && <p className="text-sm" style={{ color: 'var(--clay-accent-soft-coral)' }}>{error}</p>}
 
             <button
               type="submit"
               disabled={loading || !newPassword || !confirmPassword}
-              className="w-full flex items-center justify-center gap-2 py-4 px-4 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 disabled:cursor-not-allowed text-white text-lg font-bold rounded-2xl transition-colors"
+              className="w-full flex items-center justify-center gap-2 py-4 px-4 text-white text-lg font-bold rounded-2xl transition-colors" style={{ background: 'var(--clay-accent-warm)' }}
             >
               <KeyRound className="w-5 h-5" />
               {loading ? "Resetting..." : "Reset Password"}
@@ -240,30 +241,30 @@ export default function AdminLogin() {
 
   if (view === "reset_verify") {
     return (
-      <div className="min-h-screen bg-neutral-100 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 space-y-8">
+      <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'var(--clay-bg-primary)' }}>
+        <div className="max-w-md w-full rounded-3xl shadow-xl p-8 space-y-8" style={{ background: 'var(--clay-bg-secondary)', boxShadow: '0 4px 20px var(--clay-shadow-soft)' }}>
           <button
             onClick={() => { setView("login"); setError(""); }}
-            className="inline-flex items-center gap-2 text-neutral-500 hover:text-neutral-800 transition-colors"
+            className="inline-flex items-center gap-2 transition-colors" style={{ color: 'var(--clay-text-secondary)' }}
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Login
           </button>
 
           <div className="text-center space-y-2">
-            <div className="inline-flex p-3 bg-amber-100 rounded-2xl">
-              <KeyRound className="w-7 h-7 text-amber-700" />
+            <div className="inline-flex p-3 rounded-2xl" style={{ background: 'rgba(212, 165, 116, 0.2)' }}>
+              <KeyRound className="w-7 h-7" style={{ color: 'var(--clay-accent-warm)' }} />
             </div>
-            <h1 className="text-3xl font-bold text-neutral-900 tracking-tight">Reset Password</h1>
-            <p className="text-neutral-500">Verify your identity with Google to reset the admin password.</p>
+            <h1 className="text-3xl font-bold tracking-tight" style={{ color: 'var(--clay-text-primary)' }}>Reset Password</h1>
+            <p style={{ color: 'var(--clay-text-secondary)' }}>Verify your identity with Google to reset the admin password.</p>
           </div>
 
-          {error && <p className="text-red-600 text-sm text-center">{error}</p>}
+          {error && <p className="text-sm text-center" style={{ color: 'var(--clay-accent-soft-coral)' }}>{error}</p>}
 
           <button
             onClick={handleGoogleReset}
             disabled={googleLoading}
-            className="w-full flex items-center justify-center gap-3 py-4 px-4 bg-white border-2 border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed text-neutral-800 text-lg font-bold rounded-2xl transition-all"
+            className="w-full flex items-center justify-center gap-3 py-4 px-4 text-lg font-bold rounded-2xl transition-all disabled:opacity-50 disabled:cursor-not-allowed" style={{ background: 'var(--clay-bg-secondary)', borderColor: 'var(--clay-border)', borderWidth: '2px', color: 'var(--clay-text-primary)' }}
           >
             <svg viewBox="0 0 24 24" className="w-6 h-6" xmlns="http://www.w3.org/2000/svg">
               <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
@@ -274,7 +275,7 @@ export default function AdminLogin() {
             {googleLoading ? "Verifying..." : "Verify with Google"}
           </button>
 
-          <p className="text-xs text-neutral-400 text-center">
+          <p className="text-xs text-center" style={{ color: 'var(--clay-text-secondary)' }}>
             You must sign in with the same Google account registered as the admin email.
           </p>
         </div>
@@ -283,43 +284,43 @@ export default function AdminLogin() {
   }
 
   return (
-    <div className="min-h-screen bg-neutral-100 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 space-y-8">
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'var(--clay-bg-primary)' }}>
+      <div className="max-w-md w-full rounded-3xl shadow-xl p-8 space-y-8" style={{ background: 'var(--clay-bg-secondary)', boxShadow: '0 4px 20px var(--clay-shadow-soft)' }}>
         <button
           onClick={() => navigate("/")}
-          className="inline-flex items-center gap-2 text-neutral-500 hover:text-neutral-800 transition-colors"
+          className="inline-flex items-center gap-2 transition-colors" style={{ color: 'var(--clay-text-secondary)' }}
         >
           <ArrowLeft className="w-4 h-4" />
           Student Portal
         </button>
 
         <div className="text-center space-y-2">
-          <div className="inline-flex p-3 bg-red-100 rounded-2xl">
-            <Shield className="w-7 h-7 text-red-700" />
+          <div className="inline-flex p-3 rounded-2xl" style={{ background: 'rgba(232, 180, 168, 0.2)' }}>
+            <Shield className="w-7 h-7" style={{ color: 'var(--clay-accent-soft-coral)' }} />
           </div>
-          <h1 className="text-3xl font-bold text-neutral-900 tracking-tight">Admin Login</h1>
-          <p className="text-neutral-500">Administrators sign in here.</p>
+          <h1 className="text-3xl font-bold tracking-tight" style={{ color: 'var(--clay-text-primary)' }}>Admin Login</h1>
+          <p style={{ color: 'var(--clay-text-secondary)' }}>Administrators sign in here.</p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-5">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-neutral-700 block">Admin Password</label>
+            <label className="text-sm font-medium block" style={{ color: 'var(--clay-text-primary)' }}>Admin Password</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter admin password"
-              className="w-full p-4 border-2 border-neutral-200 rounded-2xl bg-neutral-50 focus:border-red-500 focus:ring-0 outline-none transition-colors"
+              className="w-full p-4 rounded-2xl focus:ring-0 outline-none transition-colors" style={{ borderColor: 'var(--clay-border)', borderWidth: '2px', background: 'var(--clay-bg-secondary)' }}
               required
             />
           </div>
 
-          {error && <p className="text-red-600 text-sm">{error}</p>}
+          {error && <p className="text-sm" style={{ color: 'var(--clay-accent-soft-coral)' }}>{error}</p>}
 
           <button
             type="submit"
             disabled={loading || !password.trim()}
-            className="w-full flex items-center justify-center gap-2 py-4 px-4 bg-red-600 hover:bg-red-700 disabled:bg-red-300 disabled:cursor-not-allowed text-white text-lg font-bold rounded-2xl transition-colors"
+            className="w-full flex items-center justify-center gap-2 py-4 px-4 text-white text-lg font-bold rounded-2xl transition-colors" style={{ background: 'var(--clay-accent-soft-coral)' }}
           >
             <LogIn className="w-5 h-5" />
             {loading ? "Signing in..." : "Sign In"}
@@ -328,10 +329,10 @@ export default function AdminLogin() {
 
         <div className="relative">
           <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-neutral-200" />
+            <div className="w-full" style={{ borderTop: '1px solid var(--clay-border)' }} />
           </div>
           <div className="relative flex justify-center text-sm">
-            <span className="px-3 bg-white text-neutral-400">or</span>
+            <span className="px-3" style={{ background: 'var(--clay-bg-secondary)', color: 'var(--clay-text-secondary)' }}>or</span>
           </div>
         </div>
 
@@ -352,7 +353,7 @@ export default function AdminLogin() {
         <div className="text-center">
           <button
             onClick={() => { setView("reset_verify"); setError(""); }}
-            className="text-sm text-neutral-500 hover:text-red-600 transition-colors underline underline-offset-2"
+            className="text-sm transition-colors underline underline-offset-2" style={{ color: 'var(--clay-text-secondary)' }}
           >
             Forgot password?
           </button>

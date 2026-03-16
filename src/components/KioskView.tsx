@@ -113,7 +113,7 @@ export default function KioskView() {
   const getAvailabilityRange = (f: Faculty) => {
     const todaySlots = getTodayAvailabilitySlots(f);
     if (todaySlots.length === 0) {
-      return "No availability set for today";
+      return null;
     }
 
     const formatTime = (timeStr: string) => {
@@ -235,14 +235,14 @@ export default function KioskView() {
 
   if (success) {
     return (
-      <div className="min-h-[100dvh] bg-emerald-50 flex flex-col items-center justify-center p-4 sm:p-6">
-        <div className="bg-white rounded-3xl shadow-2xl p-6 sm:p-10 lg:p-12 max-w-2xl w-full text-center space-y-6 sm:space-y-8">
-          <CheckCircle className="w-32 h-32 text-emerald-500 mx-auto" />
-          <h1 className="text-4xl sm:text-5xl font-bold text-neutral-900">Success!</h1>
-          <p className="text-lg sm:text-2xl text-neutral-600">
+      <div className="min-h-[100dvh] flex flex-col items-center justify-center p-4 sm:p-6" style={{ background: 'linear-gradient(135deg, #f5f1ed 0%, #faf8f5 50%, #f0ebe5 100%)' }}>
+        <div className="rounded-3xl p-6 sm:p-10 lg:p-12 max-w-2xl w-full text-center space-y-6 sm:space-y-8 card">
+          <CheckCircle className="w-32 h-32 mx-auto" style={{ color: 'var(--clay-accent-sage)' }} />
+          <h1 className="text-4xl sm:text-5xl font-bold" style={{ color: 'var(--clay-text-primary)' }}>Success!</h1>
+          <p className="text-lg sm:text-2xl" style={{ color: 'var(--clay-text-secondary)' }}>
             You have been added to the queue for {success.faculty_name || "the selected faculty"}.
           </p>
-          <p className="text-base sm:text-xl text-neutral-500">Redirecting to tracking page...</p>
+          <p className="text-base sm:text-xl" style={{ color: 'var(--clay-text-light)' }}>Redirecting to tracking page...</p>
         </div>
       </div>
     );
@@ -251,37 +251,41 @@ export default function KioskView() {
   const availableFaculty = faculty.filter((f) => getTodayAvailabilitySlots(f).length > 0);
 
   return (
-    <div className="min-h-[100dvh] bg-neutral-100 flex flex-col font-sans">
+    <div className="min-h-[100dvh] flex flex-col font-sans" style={{ background: 'linear-gradient(135deg, #f5f1ed 0%, #faf8f5 50%, #f0ebe5 100%)' }}>
       {/* Header */}
-      <header className="shrink-0 bg-white shadow-sm p-4 sm:p-5 lg:p-6 flex flex-col gap-3 sm:gap-4 lg:flex-row lg:items-center lg:justify-between z-10">
+      <header className="shrink-0 shadow-sm p-4 sm:p-5 lg:p-6 flex flex-col gap-3 sm:gap-4 lg:flex-row lg:items-center lg:justify-between z-10 card">
         <div className="flex items-center gap-2 sm:gap-4 w-full lg:w-auto min-w-0">
-          <button onClick={() => navigate("/")} className="p-2 sm:p-4 hover:bg-neutral-100 rounded-full transition-colors shrink-0">
-            <ArrowLeft className="w-6 h-6 sm:w-8 sm:h-8 text-neutral-600" />
+          <button onClick={() => navigate("/")} className="p-2 sm:p-4 hover:opacity-70 rounded-full transition-all shrink-0">
+            <ArrowLeft className="w-6 h-6 sm:w-8 sm:h-8" style={{ color: 'var(--clay-text-primary)' }} />
           </button>
-          <Users className="w-8 h-8 sm:w-12 sm:h-12 text-indigo-600 shrink-0" />
-          <h1 className="text-lg sm:text-3xl lg:text-4xl font-bold text-neutral-900 tracking-tight truncate">
+          <Users className="w-8 h-8 sm:w-12 sm:h-12 shrink-0" style={{ color: 'var(--clay-accent-warm)' }} />
+          <h1 className="text-lg sm:text-3xl lg:text-4xl font-bold tracking-tight truncate" style={{ color: 'var(--clay-text-primary)' }}>
             Student Booking Dashboard
           </h1>
-          <div className="ml-2 sm:ml-4 flex items-center gap-2 px-2 sm:px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100 shrink-0">
+          <div className="ml-2 sm:ml-4 flex items-center gap-2 px-2 sm:px-3 py-1 rounded-full border shrink-0 badge badge-success">
             <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ backgroundColor: 'white' }}></span>
+              <span className="relative inline-flex rounded-full h-2 w-2" style={{ backgroundColor: 'white' }}></span>
             </span>
             <span className="text-xs sm:text-sm font-bold uppercase tracking-wider hidden sm:inline-block">Live Updates</span>
           </div>
         </div>
-        <div className="text-base sm:text-lg lg:text-2xl font-medium text-neutral-500 flex items-center gap-2 w-full lg:w-auto justify-between lg:justify-end">
+        <div className="text-base sm:text-lg lg:text-2xl font-medium flex items-center gap-2 w-full lg:w-auto justify-between lg:justify-end" style={{ color: 'var(--clay-text-secondary)' }}>
           <Clock className="w-5 h-5 sm:w-6 sm:h-6 lg:w-8 lg:h-8" />
           {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </div>
       </header>
 
       <main className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-x-hidden">
-        <div className="flex-1 min-h-0 p-4 sm:p-6 lg:p-8 bg-neutral-50 flex flex-col overflow-hidden max-w-5xl w-full mx-auto lg:mx-0">
-          <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-neutral-900 mb-6 sm:mb-8">Select Faculty & Time</h2>
+        <div className="flex-1 min-h-0 p-4 sm:p-6 lg:p-8 flex flex-col overflow-hidden max-w-5xl w-full mx-auto lg:mx-0">
+          <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold mb-6 sm:mb-8" style={{ color: 'var(--clay-text-primary)' }}>Select Faculty & Time</h2>
           
           {error && (
-            <div className="mb-6 sm:mb-8 flex items-start gap-3 text-red-600 bg-red-50 p-4 sm:p-6 rounded-2xl text-base sm:text-lg lg:text-xl font-medium border border-red-100">
+            <div className="mb-6 sm:mb-8 flex items-start gap-3 p-4 sm:p-6 rounded-2xl text-base sm:text-lg lg:text-xl font-medium card" style={{
+              background: 'linear-gradient(135deg, rgba(232, 180, 168, 0.15) 0%, rgba(232, 180, 168, 0.05) 100%)',
+              borderColor: 'rgba(232, 180, 168, 0.3)',
+              color: 'var(--clay-accent-soft-coral)'
+            }}>
               <AlertCircle className="w-6 h-6 sm:w-8 sm:h-8 flex-shrink-0" />
               {error}
             </div>
@@ -294,7 +298,8 @@ export default function KioskView() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="text-center text-neutral-500 py-12"
+                  className="text-center py-12"
+                  style={{ color: 'var(--clay-text-secondary)' }}
                 >
                   <p className="text-2xl">Loading faculty data...</p>
                 </motion.div>
@@ -302,144 +307,157 @@ export default function KioskView() {
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="text-center py-12 bg-white rounded-3xl border-2 border-dashed border-neutral-200"
+                  className="text-center py-12 rounded-3xl card"
+                  style={{
+                    background: 'linear-gradient(135deg, var(--clay-bg-secondary) 0%, var(--clay-bg-tertiary) 100%)',
+                    borderColor: 'var(--clay-border-accent)'
+                  }}
                 >
-                  <Users className="w-16 h-16 text-neutral-300 mx-auto mb-4" />
-                  <p className="text-2xl font-medium text-neutral-500">No faculty with availability today.</p>
-                  <p className="text-lg text-neutral-400 mt-2">Only faculty who configured time slots for today are shown here.</p>
+                  <Users className="w-16 h-16 mx-auto mb-4" style={{ color: 'var(--clay-text-light)' }} />
+                  <p className="text-2xl font-medium" style={{ color: 'var(--clay-text-primary)' }}>No faculty with availability today.</p>
+                  <p className="text-lg mt-2" style={{ color: 'var(--clay-text-secondary)' }}>Only faculty who configured time slots for today are shown here.</p>
                   <button 
                     onClick={fetchFaculty}
-                    className="mt-6 px-6 py-3 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-bold rounded-xl transition-colors"
+                    className="mt-6 px-6 py-3 font-bold rounded-xl transition-all btn btn-secondary"
                   >
                     Retry Fetch
                   </button>
                 </motion.div>
               ) : (
-                availableFaculty.map((f) => (
+                availableFaculty.map((f) => {
+                  const timeRange = getAvailabilityRange(f);
+                  return (
                   <motion.div
                     key={f.id}
-                    layout
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    className={`bg-white rounded-3xl p-4 sm:p-6 border-4 transition-all duration-500 ${
-                      selectedFaculty === f.id
-                        ? "border-indigo-500 shadow-lg"
-                        : "border-transparent shadow-sm hover:shadow-md"
-                    }`}
+                    transition={{ duration: 0.3 }}
+                    className="rounded-2xl card transition-all duration-300 cursor-pointer"
+                    onClick={() => setExpandedFaculty(expandedFaculty === f.id ? null : f.id)}
+                    style={{
+                      background: f.status === "busy"
+                        ? 'linear-gradient(135deg, rgba(232, 180, 168, 0.15) 0%, rgba(232, 180, 168, 0.05) 100%)'
+                        : 'linear-gradient(135deg, rgba(168, 213, 186, 0.25) 0%, rgba(168, 213, 186, 0.1) 100%)',
+                      borderColor: expandedFaculty === f.id ? 'var(--clay-accent-warm)' : (f.status === 'busy' ? 'rgba(232, 180, 168, 0.4)' : 'rgba(168, 213, 186, 0.5)'),
+                      borderWidth: expandedFaculty === f.id ? '3px' : '2px',
+                      boxShadow: expandedFaculty === f.id 
+                        ? '0 12px 35px var(--clay-shadow-medium), inset 0 1px 0 rgba(255, 255, 255, 0.6)'
+                        : '0 4px 20px var(--clay-shadow-soft), inset 0 1px 0 rgba(255, 255, 255, 0.5)',
+                      transition: 'borderColor 0.3s, borderWidth 0.3s, boxShadow 0.3s'
+                    }}
                   >
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-4 sm:mb-6">
-                      <div className="min-w-0">
-                        <h3 className="text-2xl sm:text-3xl font-bold text-neutral-900 mb-2 break-words">{f.name}</h3>
-                        <p className="text-base sm:text-xl text-neutral-500">{f.department}</p>
-                      </div>
-                      <motion.div 
-                        key={f.status}
-                        initial={{ scale: 0.8, opacity: 0 }}
-                        animate={{ scale: 1, opacity: 1 }}
-                        className={`self-start px-3 sm:px-4 py-2 rounded-full flex items-center gap-2 border ${
-                        f.status === 'available' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
-                        f.status === 'busy' ? 'bg-red-50 border-red-200 text-red-700' : 
-                        'bg-neutral-100 border-neutral-200 text-neutral-600'
-                      }`}>
-                        <span className={`w-3 h-3 rounded-full ${
-                          f.status === 'available' ? 'bg-emerald-500' :
-                          f.status === 'busy' ? 'bg-red-500' : 'bg-neutral-400'
-                        }`} />
-                        <span className="text-sm sm:text-base lg:text-lg font-bold uppercase tracking-wider">{f.status}</span>
-                      </motion.div>
-                    </div>
-
-                    {/* Quick Book / Time Slots */}
-                    <div className="bg-neutral-50 rounded-2xl p-4 border border-neutral-100">
-                      <button 
-                        onClick={() => setExpandedFaculty(expandedFaculty === f.id ? null : f.id)}
-                        className="w-full flex items-center justify-between text-neutral-600 hover:text-neutral-900 transition-colors"
-                      >
-                        <div className="flex items-center gap-2">
-                          <Calendar className="w-5 h-5" />
-                          <span className="text-sm sm:text-lg font-medium">Available Slots Today</span>
+                    <div className="p-4">
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-lg font-bold" style={{ color: 'var(--clay-text-primary)' }}>{f.name}</p>
+                          <p className="text-sm" style={{ color: 'var(--clay-text-secondary)' }}>{f.department}</p>
                         </div>
-                        {expandedFaculty === f.id ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                      </button>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-3 py-1 rounded-full text-xs font-bold badge whitespace-nowrap ${
+                            f.status === 'busy' ? 'badge-warning' : 'badge-success'
+                          }`} style={{ color: 'white' }}>
+                            {f.status.toUpperCase()}
+                          </span>
+                          {expandedFaculty === f.id ? (
+                            <ChevronUp className="w-5 h-5" style={{ color: 'var(--clay-text-secondary)' }} />
+                          ) : (
+                            <ChevronDown className="w-5 h-5" style={{ color: 'var(--clay-text-secondary)' }} />
+                          )}
+                        </div>
+                      </div>
                       
-                      <AnimatePresence>
-                        {expandedFaculty === f.id && (
-                          <motion.div 
-                            initial={{ height: 0, opacity: 0, marginTop: 0 }}
-                            animate={{ height: "auto", opacity: 1, marginTop: 16 }}
-                            exit={{ height: 0, opacity: 0, marginTop: 0 }}
-                            className="overflow-hidden"
-                          >
-                            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3">
-                              {(() => {
-                                const slots = getAvailabilitySlots(f);
-                                return (
-                                  <>
-                                    {slots.map((slotObj, idx) => {
-                                      const { timeString, isPast } = slotObj;
-                                      const isBooked = bookedSlots.some(b => b.faculty_id === f.id && b.time_period === timeString);
-                                      const isDisabled = isBooked || isPast;
-                                      
-                                      return (
-                                        <button
-                                          key={idx}
-                                          disabled={isDisabled}
-                                          onClick={() => {
-                                            if (!isDisabled) {
-                                              setSelectedFaculty(f.id);
-                                              setSelectedTimePeriod(timeString);
-                                            }
-                                          }}
-                                          className={`w-full sm:flex-1 sm:min-w-[220px] py-3 sm:py-4 px-4 sm:px-6 rounded-xl text-sm sm:text-base lg:text-lg font-medium transition-all flex items-center justify-center gap-2 ${
-                                            isDisabled
-                                              ? "bg-neutral-100 text-neutral-400 cursor-not-allowed border border-neutral-200"
-                                              : selectedFaculty === f.id && selectedTimePeriod === timeString
-                                                ? "bg-emerald-600 text-white shadow-md"
-                                                : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200"
-                                          }`}
-                                        >
-                                          <Clock className="w-5 h-5" /> {timeString}
-                                          {isBooked && <span className="text-xs sm:text-sm ml-2">(Booked)</span>}
-                                          {isPast && !isBooked && <span className="text-xs sm:text-sm ml-2">(Passed)</span>}
-                                        </button>
-                                      );
-                                    })}
+                      {timeRange && (
+                        <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: 'var(--clay-text-secondary)' }}>
+                          <Clock className="w-4 h-4" />
+                          {timeRange}
+                        </div>
+                      )}
+
+                      {/* Expanded Time Slots */}
+                      {expandedFaculty === f.id && (
+                        <div
+                          className="mt-4 pt-4 border-t overflow-hidden transition-opacity duration-150"
+                          style={{ borderColor: 'rgba(0,0,0,0.1)' }}
+                        >
+                            <h4 className="text-base font-bold mb-3" style={{ color: 'var(--clay-text-primary)' }}>
+                              Select a Time Slot
+                            </h4>
+                            {(() => {
+                              const slots = getAvailabilitySlots(f);
+                              return (
+                                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                                  {slots.map((slotObj, idx) => {
+                                    const { timeString, isPast } = slotObj;
+                                    const isBooked = bookedSlots.some(b => b.faculty_id === f.id && b.time_period === timeString);
+                                    const isDisabled = isBooked || isPast;
                                     
-                                    {f.status === 'busy' && slots.length === 0 && (
-                                      <div className="w-full py-4 text-center text-sm sm:text-lg text-red-600 bg-red-50 rounded-xl font-medium">
-                                        Currently in a consultation. Please wait or select another faculty.
-                                      </div>
-                                    )}
-                                    
-                                    {f.status === 'offline' && slots.length === 0 && (
-                                      <div className="w-full py-4 text-center text-sm sm:text-lg text-neutral-500 bg-neutral-100 rounded-xl font-medium">
-                                        Not available for booking at this time.
-                                      </div>
-                                    )}
-                                  </>
-                                );
-                              })()}
-                            </div>
-                          </motion.div>
+                                    return (
+                                      <button
+                                        key={idx}
+                                        disabled={isDisabled}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (!isDisabled) {
+                                            setSelectedFaculty(f.id);
+                                            setSelectedTimePeriod(timeString);
+                                          }
+                                        }}
+                                        className={`w-full py-3 px-2 rounded-lg text-xs font-bold transition-all flex flex-col items-center justify-center gap-1 text-white ${
+                                          isDisabled
+                                            ? "opacity-50 cursor-not-allowed bg-gray-400"
+                                            : selectedTimePeriod === timeString
+                                              ? "hover:opacity-90"
+                                              : "hover:opacity-90"
+                                        }`}
+                                        style={{
+                                          background: isDisabled ? '#999999' : (selectedTimePeriod === timeString ? 'var(--clay-accent-warm)' : 'var(--clay-accent-sky)')
+                                        }}
+                                      >
+                                        <Clock className="w-4 h-4" />
+                                        <span>{timeString}</span>
+                                      </button>
+                                    );
+                                  })}
+                                  
+                                  {slots.length === 0 && f.status === 'busy' && (
+                                    <div className="col-span-2 sm:col-span-3 py-3 text-center text-sm font-bold rounded-lg text-white" style={{ background: 'var(--clay-accent-soft-coral)' }}>
+                                      Currently in consultation
+                                    </div>
+                                  )}
+                                  
+                                  {slots.length === 0 && f.status === 'offline' && (
+                                    <div className="col-span-2 sm:col-span-3 py-3 text-center text-sm font-bold rounded-lg text-white" style={{ background: '#999999' }}>
+                                      Not available for booking
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </div>
                         )}
-                      </AnimatePresence>
                     </div>
                   </motion.div>
-                ))
+                );
+                })
               )}
             </AnimatePresence>
           </div>
 
-          <div className="pt-6 sm:pt-8 mt-auto border-t border-neutral-200">
-            <div className="mb-5">
-              <label className="block text-base sm:text-lg font-semibold text-neutral-800 mb-2">
-                Consultation Concern <span className="text-red-500">*</span>
+          <div className="pt-8 mt-auto border-t-2" style={{ borderColor: 'var(--clay-border)' }}>
+            <div className="mb-8">
+              <label className="block text-2xl font-bold mb-4" style={{ color: 'var(--clay-text-primary)' }}>
+                Why are you visiting? <span style={{ color: 'var(--clay-accent-coral)' }}>*</span>
               </label>
               <select
                 value={consultationConcern}
                 onChange={(e) => setConsultationConcern(e.target.value)}
-                className="w-full p-4 border-2 border-neutral-200 rounded-2xl bg-white focus:border-indigo-500 focus:ring-0 outline-none transition-colors text-base appearance-none"
+                className="w-full p-4 border-3 rounded-2xl outline-none transition-colors text-xl font-semibold appearance-none"
+                style={{
+                  borderColor: 'var(--clay-border)',
+                  background: 'var(--clay-bg-secondary)',
+                  color: 'var(--clay-text-primary)'
+                }}
                 required
               >
                 <option value="">Select your concern...</option>
@@ -455,61 +473,13 @@ export default function KioskView() {
             <button
               onClick={handleJoinQueue}
               disabled={loading || !studentId || !selectedFaculty || !selectedTimePeriod || !consultationConcern.trim()}
-              className="w-full py-4 sm:py-5 lg:py-6 bg-indigo-600 hover:bg-indigo-700 disabled:bg-neutral-300 disabled:text-neutral-500 disabled:cursor-not-allowed text-white text-xl sm:text-2xl lg:text-3xl font-bold rounded-2xl shadow-xl transition-all active:scale-95 flex items-center justify-center gap-3 sm:gap-4"
+              className="w-full py-8 disabled:opacity-50 disabled:cursor-not-allowed text-white text-3xl font-bold rounded-2xl transition-all active:scale-95 flex items-center justify-center gap-4 min-h-[100px] btn btn-primary"
             >
-              {loading ? "Processing..." : "Confirm Booking"}
-              {!loading && <CheckCircle className="w-8 h-8" />}
+              {loading ? "Processing..." : <>
+                <CheckCircle className="w-10 h-10" />
+                CONFIRM BOOKING
+              </>}
             </button>
-          </div>
-        </div>
-
-        {/* Live Monitor Sidebar */}
-        <div className="w-full lg:w-96 bg-white border-t lg:border-t-0 lg:border-l border-neutral-200 p-4 sm:p-6 flex flex-col overflow-hidden max-h-[40dvh] lg:max-h-none">
-          <h2 className="text-xl sm:text-2xl font-bold text-neutral-900 mb-4 sm:mb-6 flex items-center gap-2 shrink-0">
-            <span className="relative flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-            </span>
-            Live Monitor
-          </h2>
-          <div className="flex-1 overflow-y-auto space-y-4 pr-0 sm:pr-2">
-            {availableFaculty.length === 0 ? (
-              <div className="text-center py-8 text-neutral-500">
-                <Users className="w-12 h-12 text-neutral-300 mx-auto mb-3" />
-                <p>No faculty members have availability today.</p>
-              </div>
-            ) : (
-              availableFaculty.map(f => (
-                <div
-                  key={f.id}
-                  className={`p-4 rounded-2xl border ${
-                    f.status === 'busy'
-                      ? 'bg-amber-50 border-amber-100'
-                      : 'bg-emerald-50 border-emerald-100'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className={`font-bold ${f.status === 'busy' ? 'text-amber-900' : 'text-emerald-900'}`}>{f.name}</h3>
-                      <p className={`text-sm ${f.status === 'busy' ? 'text-amber-700' : 'text-emerald-700'}`}>{f.department}</p>
-                    </div>
-                    <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ${
-                      f.status === 'busy'
-                        ? 'bg-amber-100 text-amber-800'
-                        : f.status === 'offline'
-                          ? 'bg-neutral-200 text-neutral-700'
-                          : 'bg-emerald-100 text-emerald-800'
-                    }`}>
-                      {f.status}
-                    </span>
-                  </div>
-                  <div className={`mt-2 text-sm font-medium flex items-center gap-1 ${f.status === 'busy' ? 'text-amber-800' : 'text-emerald-800'}`}>
-                    <Clock className="w-4 h-4" />
-                    {getAvailabilityRange(f)}
-                  </div>
-                </div>
-              ))
-            )}
           </div>
         </div>
       </main>

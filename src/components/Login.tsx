@@ -419,120 +419,69 @@ export default function Login() {
   const activeStudents = [...servingStudents, ...waitingStudents];
 
   return (
-    <div className="min-h-[100dvh] bg-neutral-100 flex flex-col lg:flex-row">
-      {/* Faculty Sidebar (Left) */}
-      <div className="order-2 lg:order-1 w-full lg:w-[340px] max-h-[32dvh] sm:max-h-[24rem] lg:max-h-none bg-white border-t lg:border-t-0 lg:border-r border-neutral-200 p-4 sm:p-6 flex flex-col overflow-hidden shadow-lg z-10 shrink-0">
-        <h2 className="text-xl sm:text-2xl font-bold text-neutral-900 mb-4 sm:mb-6 flex items-center gap-2 shrink-0">
-          <span className="relative flex h-3 w-3">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-          </span>
-          Available Faculty
-        </h2>
-        <div className="flex-1 overflow-y-auto pr-0 sm:pr-2">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-bold text-neutral-600 uppercase tracking-wider">Faculty</h3>
-              <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">
-                {availableFaculty.length}
-              </span>
-            </div>
-            {availableFaculty.length === 0 ? (
-              <div className="text-center py-6 text-neutral-500 bg-neutral-50 rounded-2xl border border-neutral-200">
-                <Users className="w-10 h-10 text-neutral-300 mx-auto mb-2" />
-                <p className="text-sm">No faculty members have availability for today.</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {availableFaculty.map(f => (
-                  <div
-                    key={f.id}
-                    className={`p-4 rounded-2xl border ${
-                      f.status === "busy"
-                        ? "bg-amber-50 border-amber-100"
-                        : "bg-emerald-50 border-emerald-100"
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h3 className={`font-bold ${f.status === "busy" ? "text-amber-900" : "text-emerald-900"}`}>{f.name}</h3>
-                        <p className={`text-sm ${f.status === "busy" ? "text-amber-700" : "text-emerald-700"}`}>{f.department}</p>
-                      </div>
-                      <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ${
-                        f.status === "busy"
-                          ? "bg-amber-100 text-amber-800"
-                          : f.status === "offline"
-                            ? "bg-neutral-200 text-neutral-700"
-                            : "bg-emerald-100 text-emerald-800"
-                      }`}>
-                        {f.status}
-                      </span>
-                    </div>
-                    <div className={`mt-2 text-sm font-medium flex items-center gap-1 ${f.status === "busy" ? "text-amber-800" : "text-emerald-800"}`}>
-                      <Clock className="w-4 h-4" />
-                      {getAvailabilityRange(f)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-        </div>
-      </div>
-
-      {/* Login Form (Center) */}
-      <div className="order-1 lg:order-2 flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-8 min-h-0">
-        <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-6 sm:p-8 space-y-6 sm:space-y-8">
-          <div className="text-center space-y-2">
-            <h1 className="text-3xl font-bold text-neutral-900 tracking-tight">
+    <div className="min-h-[100dvh] flex flex-col" style={{ background: 'linear-gradient(135deg, #f5f1ed 0%, #faf8f5 50%, #f0ebe5 100%)' }}>
+      {/* Kiosk Mode: Full-screen centered layout */}
+      <div className="flex-1 flex items-center justify-center p-4 sm:p-8">
+        <div className="w-full max-w-2xl rounded-3xl p-8 sm:p-12 space-y-8 card">
+          <div className="text-center space-y-4">
+            <h1 className="text-5xl sm:text-6xl font-bold tracking-tight" style={{ color: 'var(--clay-text-primary)' }}>
               Welcome
             </h1>
-            <p className="text-neutral-500">Student booking portal</p>
+            <p className="text-2xl sm:text-3xl" style={{ color: 'var(--clay-text-secondary)' }}>Student Consultation Booking System</p>
+            {availableFaculty.length === 0 && (
+              <p className="text-lg sm:text-xl font-semibold" style={{ color: 'var(--clay-accent-soft-coral)' }}>
+                 No faculty available right now
+              </p>
+            )}
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-6">
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2">
-              {availableFaculty.length === 0 && (
-                <div className="p-4 bg-red-50 border-2 border-red-200 rounded-2xl">
-                  <p className="text-red-700 font-semibold text-sm text-center">
-                     No faculty members have availability at the moment
-                  </p>
-                  <p className="text-red-600 text-xs text-center mt-1">
-                    Please try again later or contact support.
-                  </p>
-                </div>
-              )}
-              <div className="flex p-1 bg-neutral-100 rounded-xl">
+          <form onSubmit={handleLogin} className="space-y-8">
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2">
+              <div className="flex gap-3 p-2 rounded-2xl" style={{ backgroundColor: 'var(--clay-bg-tertiary)' }}>
                 <button
                   type="button"
                   onClick={() => { setInputMode("scan"); setError(""); }}
                   disabled={availableFaculty.length === 0}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-lg transition-all ${
-                    inputMode === "scan" ? "bg-white text-emerald-700 shadow-sm" : "text-neutral-500 hover:text-neutral-700"
-                  } ${availableFaculty.length === 0 ? "opacity-50 cursor-not-allowed" : ""}`}
+                  className="flex-1 flex items-center justify-center gap-3 py-4 px-6 text-lg sm:text-2xl font-bold rounded-xl transition-all"
+                  style={{
+                    background: inputMode === "scan" ? 'var(--clay-bg-secondary)' : 'transparent',
+                    color: inputMode === "scan" ? 'var(--clay-accent-warm)' : 'var(--clay-text-secondary)',
+                    cursor: availableFaculty.length === 0 ? 'not-allowed' : 'pointer',
+                    opacity: availableFaculty.length === 0 ? 0.5 : 1
+                  }}
                 >
-                  <ScanLine className="w-4 h-4" /> Scan ID
+                  <ScanLine className="w-7 h-7 sm:w-8 sm:h-8" /> Scan ID
                 </button>
                 <button
                   type="button"
                   onClick={() => { setInputMode("manual"); setError(""); }}
                   disabled={availableFaculty.length === 0}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-medium rounded-lg transition-all ${
-                    inputMode === "manual" ? "bg-white text-emerald-700 shadow-sm" : "text-neutral-500 hover:text-neutral-700"
-                  } ${availableFaculty.length === 0 ? "opacity-50 cursor-not-allowed" : ""}`}
+                  className="flex-1 flex items-center justify-center gap-3 py-4 px-6 text-lg sm:text-2xl font-bold rounded-xl transition-all"
+                  style={{
+                    background: inputMode === "manual" ? 'var(--clay-bg-secondary)' : 'transparent',
+                    color: inputMode === "manual" ? 'var(--clay-accent-warm)' : 'var(--clay-text-secondary)',
+                    cursor: availableFaculty.length === 0 ? 'not-allowed' : 'pointer',
+                    opacity: availableFaculty.length === 0 ? 0.5 : 1
+                  }}
                 >
-                  <Keyboard className="w-4 h-4" /> Manual Input
+                  <Keyboard className="w-7 h-7 sm:w-8 sm:h-8" /> Manual Input
                 </button>
               </div>
 
               {inputMode === "scan" ? (
-                <div className="space-y-4">
-                  <div className={`w-full h-28 sm:h-32 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center text-center transition-all ${
-                    availableFaculty.length === 0
-                      ? "border-neutral-300 bg-neutral-50 text-neutral-400"
-                      : "border-emerald-300 bg-emerald-50 text-emerald-500 animate-pulse"
-                  }`}>
-                    <ScanLine className="w-10 h-10 mb-2" />
-                    <span className="text-sm font-bold">
-                      {availableFaculty.length === 0 ? "Login Unavailable" : "Please scan the barcode on your student ID"}
+                <div className="space-y-6">
+                  <div className="w-full h-40 sm:h-48 border-4 border-dashed rounded-2xl flex flex-col items-center justify-center text-center transition-all"
+                    style={{
+                      borderColor: availableFaculty.length === 0 ? 'var(--clay-border)' : 'var(--clay-accent-warm)',
+                      background: availableFaculty.length === 0 
+                        ? 'transparent'
+                        : 'linear-gradient(135deg, rgba(212, 165, 116, 0.1) 0%, rgba(212, 165, 116, 0.05) 100%)',
+                      color: availableFaculty.length === 0 ? 'var(--clay-text-light)' : 'var(--clay-accent-warm)'
+                    }}
+                  >
+                    <ScanLine className="w-16 h-16 sm:w-20 sm:h-20 mb-3" />
+                    <span className="text-xl sm:text-2xl font-bold">
+                      {availableFaculty.length === 0 ? "System Offline" : "Scan Your Student ID"}
                     </span>
                   </div>
 
@@ -546,28 +495,32 @@ export default function Login() {
                       setIdentifier(e.target.value);
                     }}
                     disabled={availableFaculty.length === 0}
-                    placeholder="Or type Student ID and press Enter"
-                    className={`w-full p-4 border-2 rounded-2xl bg-neutral-50 outline-none transition-colors text-lg ${
-                      availableFaculty.length === 0
-                        ? "border-neutral-200 text-neutral-400 cursor-not-allowed opacity-60"
-                        : "border-neutral-200 focus:border-emerald-500"
-                    }`}
+                    placeholder="Or type and press Enter"
+                    className="w-full p-6 border-3 rounded-2xl outline-none transition-colors text-2xl font-semibold text-center"
+                    style={{
+                      borderColor: availableFaculty.length === 0 ? 'var(--clay-border)' : 'var(--clay-border)',
+                      background: availableFaculty.length === 0 ? 'rgba(0,0,0,0.05)' : 'var(--clay-bg-secondary)',
+                      color: availableFaculty.length === 0 ? 'rgba(0,0,0,0.5)' : 'var(--clay-text-primary)',
+                      cursor: availableFaculty.length === 0 ? 'not-allowed' : 'auto'
+                    }}
                     required
                   />
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-6">
                   <input
                     type="text"
                     value={identifier}
                     onChange={(e) => setIdentifier(e.target.value)}
                     disabled={availableFaculty.length === 0}
-                    placeholder="Student ID (e.g. 2021-0001)"
-                    className={`w-full p-3 border-2 rounded-xl bg-neutral-50 outline-none transition-colors ${
-                      availableFaculty.length === 0
-                        ? "border-neutral-200 text-neutral-400 cursor-not-allowed opacity-60"
-                        : "border-neutral-200 focus:border-emerald-500"
-                    }`}
+                    placeholder="Student ID"
+                    className="w-full p-5 border-3 rounded-2xl outline-none transition-colors text-2xl font-semibold"
+                    style={{
+                      borderColor: 'var(--clay-border)',
+                      background: availableFaculty.length === 0 ? 'rgba(0,0,0,0.05)' : 'var(--clay-bg-secondary)',
+                      color: availableFaculty.length === 0 ? 'rgba(0,0,0,0.5)' : 'var(--clay-text-primary)',
+                      cursor: availableFaculty.length === 0 ? 'not-allowed' : 'auto'
+                    }}
                     required
                   />
                   <input
@@ -576,11 +529,13 @@ export default function Login() {
                     onChange={(e) => setStudentName(e.target.value)}
                     disabled={availableFaculty.length === 0}
                     placeholder="Full Name"
-                    className={`w-full p-3 border-2 rounded-xl bg-neutral-50 outline-none transition-colors ${
-                      availableFaculty.length === 0
-                        ? "border-neutral-200 text-neutral-400 cursor-not-allowed opacity-60"
-                        : "border-neutral-200 focus:border-emerald-500"
-                    }`}
+                    className="w-full p-5 border-3 rounded-2xl outline-none transition-colors text-2xl font-semibold"
+                    style={{
+                      borderColor: 'var(--clay-border)',
+                      background: availableFaculty.length === 0 ? 'rgba(0,0,0,0.05)' : 'var(--clay-bg-secondary)',
+                      color: availableFaculty.length === 0 ? 'rgba(0,0,0,0.5)' : 'var(--clay-text-primary)',
+                      cursor: availableFaculty.length === 0 ? 'not-allowed' : 'auto'
+                    }}
                     required
                   />
                   <input
@@ -589,22 +544,26 @@ export default function Login() {
                     onChange={(e) => setStudentEmail(e.target.value)}
                     disabled={availableFaculty.length === 0}
                     placeholder="Email Address"
-                    className={`w-full p-3 border-2 rounded-xl bg-neutral-50 outline-none transition-colors ${
-                      availableFaculty.length === 0
-                        ? "border-neutral-200 text-neutral-400 cursor-not-allowed opacity-60"
-                        : "border-neutral-200 focus:border-emerald-500"
-                    }`}
+                    className="w-full p-5 border-3 rounded-2xl outline-none transition-colors text-2xl font-semibold"
+                    style={{
+                      borderColor: 'var(--clay-border)',
+                      background: availableFaculty.length === 0 ? 'rgba(0,0,0,0.05)' : 'var(--clay-bg-secondary)',
+                      color: availableFaculty.length === 0 ? 'rgba(0,0,0,0.5)' : 'var(--clay-text-primary)',
+                      cursor: availableFaculty.length === 0 ? 'not-allowed' : 'auto'
+                    }}
                     required
                   />
                   <select
                     value={course}
                     onChange={(e) => setCourse(e.target.value)}
                     disabled={availableFaculty.length === 0}
-                    className={`w-full p-3 border-2 rounded-xl bg-neutral-50 outline-none transition-colors appearance-none ${
-                      availableFaculty.length === 0
-                        ? "border-neutral-200 text-neutral-400 cursor-not-allowed opacity-60"
-                        : "border-neutral-200 focus:border-emerald-500"
-                    }`}
+                    className="w-full p-5 border-3 rounded-2xl outline-none transition-colors text-2xl font-semibold appearance-none"
+                    style={{
+                      borderColor: 'var(--clay-border)',
+                      background: availableFaculty.length === 0 ? 'rgba(0,0,0,0.05)' : 'var(--clay-bg-secondary)',
+                      color: availableFaculty.length === 0 ? 'rgba(0,0,0,0.5)' : 'var(--clay-text-primary)',
+                      cursor: availableFaculty.length === 0 ? 'not-allowed' : 'auto'
+                    }}
                     required
                   >
                     <option value="" disabled>Select Course / Department</option>
@@ -618,73 +577,109 @@ export default function Login() {
               )}
             </div>
 
-          {error && <p className="text-red-500 text-sm">{error}</p>}
+          {error && <p className="text-xl text-center font-semibold" style={{ color: 'var(--clay-accent-soft-coral)' }}>{error}</p>}
 
           <button
             type="submit"
             disabled={loading || !identifier || availableFaculty.length === 0}
-            className="w-full flex items-center justify-center gap-2 py-4 px-4 text-white text-lg font-bold rounded-2xl shadow-lg transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed bg-emerald-600 hover:bg-emerald-700"
+            className="w-full flex items-center justify-center gap-3 py-6 px-6 text-3xl font-bold rounded-2xl transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed btn btn-primary min-h-[80px]"
           >
             {loading ? "Please wait..." : (
               <>
-                <LogIn className="w-5 h-5" />
-                Continue
+                <LogIn className="w-8 h-8" />
+                CONTINUE
               </>
             )}
           </button>
         </form>
-      </div>
-      </div>
 
-      {/* Students Queue Sidebar (Right) */}
-      <div className="order-3 lg:order-3 w-full lg:w-[340px] max-h-[32dvh] sm:max-h-[24rem] lg:max-h-none bg-white border-t lg:border-t-0 lg:border-l border-neutral-200 p-4 sm:p-6 flex flex-col overflow-hidden shadow-lg z-10 shrink-0">
-        <h2 className="text-xl sm:text-2xl font-bold text-neutral-900 mb-4 sm:mb-6 flex items-center gap-2 shrink-0">
-          <span className="relative flex h-3 w-3">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
-          </span>
-          Students Queue
-        </h2>
-        <div className="flex-1 overflow-y-auto pr-0 sm:pr-2">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
-            <h3 className="text-sm font-bold text-neutral-600 uppercase tracking-wider">Live Queue</h3>
-            <div className="flex items-center gap-1.5 text-xs">
-              <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold">Now {servingStudents.length}</span>
-              <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-700 font-semibold">Wait {waitingStudents.length}</span>
+        {/* Live Monitor Sidebar - Only show if faculty available */}
+        {availableFaculty.length > 0 && (
+        <div className="mt-8 pt-8 border-t-2" style={{ borderColor: 'var(--clay-border)' }}>
+          <h2 className="text-2xl font-bold mb-6 flex items-center gap-3" style={{ color: 'var(--clay-text-primary)' }}>
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ backgroundColor: 'var(--clay-accent-sage)' }}></span>
+              <span className="relative inline-flex rounded-full h-3 w-3" style={{ backgroundColor: 'var(--clay-accent-sage)' }}></span>
+            </span>
+            Live Monitor
+          </h2>
+          
+          <div className="space-y-4">
+            {/* Serving Students (Ongoing Consultations) */}
+            {liveQueue.filter(item => item.status === "serving").length > 0 && (
+              <div>
+                <h3 className="text-xl font-bold mb-3 px-4 py-2 rounded-lg badge badge-success" style={{ color: 'white' }}>
+                  NOW SERVING ({liveQueue.filter(item => item.status === "serving").length})
+                </h3>
+                <div className="space-y-3">
+                  {liveQueue.filter(item => item.status === "serving").map((item) => (
+                    <div key={item.id} className="p-4 rounded-2xl card" style={{
+                      background: 'linear-gradient(135deg, rgba(168, 213, 186, 0.2) 0%, rgba(168, 213, 186, 0.05) 100%)',
+                      borderColor: 'rgba(168, 213, 186, 0.3)'
+                    }}>
+                      <p className="text-lg font-bold" style={{ color: 'var(--clay-text-primary)' }}>{item.student_name}</p>
+                      <p className="text-sm" style={{ color: 'var(--clay-text-secondary)' }}>Faculty: <strong>{item.faculty_name}</strong></p>
+                      <p className="text-sm" style={{ color: 'var(--clay-text-secondary)' }}>Time: <strong>{item.time_period || 'Walk-in'}</strong></p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Waiting Students (Queue) */}
+            {liveQueue.filter(item => item.status === "waiting").length > 0 && (
+              <div>
+                <h3 className="text-xl font-bold mb-3 px-4 py-2 rounded-lg badge badge-info" style={{ color: 'white' }}>
+                  IN QUEUE ({liveQueue.filter(item => item.status === "waiting").length})
+                </h3>
+                <div className="space-y-3">
+                  {liveQueue.filter(item => item.status === "waiting").map((item) => (
+                    <div key={item.id} className="p-4 rounded-2xl card" style={{
+                      background: 'linear-gradient(135deg, rgba(200, 184, 228, 0.2) 0%, rgba(200, 184, 228, 0.05) 100%)',
+                      borderColor: 'rgba(200, 184, 228, 0.3)'
+                    }}>
+                      <p className="text-lg font-bold" style={{ color: 'var(--clay-text-primary)' }}>{item.student_name}</p>
+                      <p className="text-sm" style={{ color: 'var(--clay-text-secondary)' }}>Faculty: <strong>{item.faculty_name}</strong></p>
+                      <p className="text-sm" style={{ color: 'var(--clay-text-secondary)' }}>Time: <strong>{item.time_period || 'Walk-in'}</strong></p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Faculty Status - Always show when faculty available */}
+            <div>
+              <h3 className="text-xl font-bold mb-3 px-4 py-2 rounded-lg badge badge-warning" style={{ color: 'white' }}>
+                FACULTY ({availableFaculty.length} Available)
+              </h3>
+              <div className="space-y-3">
+                {availableFaculty.map(f => (
+                  <div key={f.id} className="p-4 rounded-2xl card" style={{
+                    background: f.status === "busy"
+                      ? 'linear-gradient(135deg, rgba(232, 180, 168, 0.15) 0%, rgba(232, 180, 168, 0.05) 100%)'
+                      : 'linear-gradient(135deg, rgba(168, 213, 186, 0.15) 0%, rgba(168, 213, 186, 0.05) 100%)',
+                    borderColor: f.status === "busy" ? 'rgba(232, 180, 168, 0.3)' : 'rgba(168, 213, 186, 0.3)'
+                  }}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-lg font-bold" style={{ color: 'var(--clay-text-primary)' }}>{f.name}</p>
+                        <p className="text-sm" style={{ color: 'var(--clay-text-secondary)' }}>{f.department}</p>
+                      </div>
+                      <span className={`px-3 py-1 rounded-full text-sm font-bold badge ${
+                        f.status === 'busy' ? 'badge-warning' : 'badge-success'
+                      }`} style={{ color: 'white' }}>
+                        {f.status.toUpperCase()}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-          {liveQueueLoading && activeStudents.length === 0 ? (
-            <div className="text-center py-6 text-neutral-500 bg-neutral-50 rounded-2xl border border-neutral-200">
-              <p className="text-sm">Loading students queue...</p>
-            </div>
-          ) : activeStudents.length === 0 ? (
-            <div className="text-center py-6 text-neutral-500 bg-neutral-50 rounded-2xl border border-neutral-200">
-              <p className="text-sm">No active students in queue.</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {activeStudents.map((item) => (
-                <div key={item.id} className="p-4 bg-indigo-50 border border-indigo-100 rounded-2xl">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="font-bold text-indigo-900 truncate">{item.student_name}</h3>
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                      item.status === "serving"
-                        ? "bg-emerald-100 text-emerald-700"
-                        : "bg-blue-100 text-blue-700"
-                    }`}>
-                      {item.status}
-                    </span>
-                  </div>
-                  <p className="text-xs text-indigo-700 mt-1 truncate">Student Number: {item.student_number || "N/A"}</p>
-                  <p className="text-xs text-indigo-700 mt-1 truncate">Faculty: {item.faculty_name}</p>
-                  <p className="text-[11px] text-indigo-500 mt-1">Slot: {item.time_period || "Walk-in / No slot"}</p>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
+        )}
       </div>
-
+      </div>
     </div>
   );
 }

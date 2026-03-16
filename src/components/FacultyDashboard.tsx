@@ -129,7 +129,7 @@ export default function FacultyDashboard() {
 
     // Optional: Show browser notification if permission granted
     if ("Notification" in window && Notification.permission === "granted") {
-      new Notification("Consultation Starting Soon! 🔔", {
+      new Notification("Consultation Starting Soon", {
         body: `${data.student_name} - ${data.time_slot}`,
         tag: `consultation-${data.consultation_id}`,
         requireInteraction: true
@@ -1033,7 +1033,7 @@ export default function FacultyDashboard() {
         <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end">
           <button
             onClick={openAvailabilityModal}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium rounded-xl transition-colors flex-1 sm:flex-none justify-center"
+            className="flex items-center gap-2 px-4 py-2 text-white font-medium rounded-xl transition-colors flex-1 sm:flex-none justify-center" style={{ background: 'var(--clay-accent-lavender)' }}
           >
             <Clock className="w-4 h-4" /> Availability
           </button>
@@ -1249,30 +1249,27 @@ export default function FacultyDashboard() {
             <h3 className="text-lg font-bold text-neutral-900 mb-4">Session Controls</h3>
             {selectedFacultyData ? (
               <div className="space-y-4">
-                <div className="p-4 bg-neutral-50 rounded-xl">
-                  <p className="text-sm text-neutral-500 mb-1">Current Status</p>
-                  <p className={`text-lg font-medium flex items-center gap-2 ${
-                    selectedFacultyData.status === 'available' ? 'text-emerald-600' : 
-                    selectedFacultyData.status === 'busy' ? 'text-amber-600' : 'text-neutral-600'
-                  }`}>
-                    <span className={`w-3 h-3 rounded-full ${
-                      selectedFacultyData.status === 'available' ? 'bg-emerald-500 animate-pulse' : 
-                      selectedFacultyData.status === 'busy' ? 'bg-amber-500' : 'bg-neutral-500'
-                    }`} />
+                <div className="p-4 rounded-xl" style={{ background: 'var(--clay-bg-secondary)' }}>
+                  <p className="text-sm mb-1" style={{ color: 'var(--clay-text-secondary)' }}>Current Status</p>
+                  <p className="text-lg font-medium flex items-center gap-2" style={{ color: selectedFacultyData.status === 'available' ? 'var(--clay-accent-sage)' : selectedFacultyData.status === 'busy' ? 'var(--clay-accent-warm)' : 'var(--clay-text-secondary)' }}>
+                    <span className="w-3 h-3 rounded-full" style={{ 
+                      background: selectedFacultyData.status === 'available' ? 'var(--clay-accent-sage)' : selectedFacultyData.status === 'busy' ? 'var(--clay-accent-warm)' : 'var(--clay-text-light)',
+                      animation: selectedFacultyData.status === 'available' ? 'pulse 2s infinite' : 'none'
+                    }} />
                     {selectedFacultyData.status === 'available' ? 'Accepting Consultations' : 
                      selectedFacultyData.status === 'busy' ? 'Busy' : 'Offline'}
                   </p>
                 </div>
                 <button 
                   onClick={toggleFacultyStatus}
-                  className="w-full py-3 px-4 bg-neutral-200 hover:bg-neutral-300 text-neutral-800 font-medium rounded-xl transition-colors"
+                  className="w-full py-3 px-4 text-white font-medium rounded-xl transition-colors" style={{ background: selectedFacultyData.status === 'available' ? 'var(--clay-accent-soft-coral)' : 'var(--clay-accent-sage)' }}
                 >
                   {selectedFacultyData.status === 'available' ? 'Go Offline' : 'Go Available'}
                 </button>
 
                 <button
                   onClick={openPasswordModal}
-                  className="w-full py-3 px-4 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-medium rounded-xl transition-colors flex items-center justify-center gap-2"
+                  className="w-full py-3 px-4 text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-2" style={{ background: 'var(--clay-accent-warm)' }}
                 >
                   <KeyRound className="w-4 h-4" /> Change Password
                 </button>

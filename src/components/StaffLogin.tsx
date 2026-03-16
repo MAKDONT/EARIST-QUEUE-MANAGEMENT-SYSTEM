@@ -42,27 +42,27 @@ export default function StaffLogin() {
   };
 
   return (
-    <div className="min-h-[100dvh] bg-neutral-100 flex items-center justify-center p-4 sm:p-6">
-      <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-6 sm:p-8 space-y-6 sm:space-y-8">
+    <div className="min-h-[100dvh] flex items-center justify-center p-4 sm:p-6" style={{ background: 'var(--clay-bg-primary)' }}>
+      <div className="max-w-md w-full rounded-3xl shadow-xl p-6 sm:p-8 space-y-6 sm:space-y-8" style={{ background: 'var(--clay-bg-secondary)', boxShadow: '0 4px 20px var(--clay-shadow-soft)' }}>
         <button
           onClick={() => navigate("/")}
-          className="inline-flex items-center gap-2 text-neutral-500 hover:text-neutral-800 transition-colors"
+          className="inline-flex items-center gap-2 transition-colors" style={{ color: 'var(--clay-text-secondary)' }}
         >
           <ArrowLeft className="w-4 h-4" />
           Student Portal
         </button>
 
         <div className="text-center space-y-2">
-          <div className="inline-flex p-3 bg-indigo-100 rounded-2xl">
-            <Users className="w-7 h-7 text-indigo-700" />
+          <div className="inline-flex p-3 rounded-2xl" style={{ background: 'rgba(200, 184, 228, 0.2)' }}>
+            <Users className="w-7 h-7" style={{ color: 'var(--clay-accent-lavender)' }} />
           </div>
-          <h1 className="text-3xl font-bold text-neutral-900 tracking-tight">Staff Login</h1>
-          <p className="text-neutral-500">Faculty members sign in here.</p>
+          <h1 className="text-3xl font-bold tracking-tight" style={{ color: 'var(--clay-text-primary)' }}>Staff Login</h1>
+          <p style={{ color: 'var(--clay-text-secondary)' }}>Faculty members sign in here.</p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-5">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-neutral-700 block">Email Address</label>
+            <label className="text-sm font-medium block" style={{ color: 'var(--clay-text-primary)' }}>Email Address</label>
             <input
               type="email"
               value={email}
@@ -71,29 +71,29 @@ export default function StaffLogin() {
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}
-              className="w-full p-4 border-2 border-neutral-200 rounded-2xl bg-neutral-50 focus:border-indigo-500 focus:ring-0 outline-none transition-colors"
+              className="w-full p-4 rounded-2xl focus:ring-0 outline-none transition-colors" style={{ borderColor: 'var(--clay-border)', borderWidth: '2px', background: 'var(--clay-bg-secondary)' }}
               required
             />
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-neutral-700 block">Password</label>
+            <label className="text-sm font-medium block" style={{ color: 'var(--clay-text-primary)' }}>Password</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter password"
-              className="w-full p-4 border-2 border-neutral-200 rounded-2xl bg-neutral-50 focus:border-indigo-500 focus:ring-0 outline-none transition-colors"
+              className="w-full p-4 rounded-2xl focus:ring-0 outline-none transition-colors" style={{ borderColor: 'var(--clay-border)', borderWidth: '2px', background: 'var(--clay-bg-secondary)' }}
               required
             />
           </div>
 
-          {error && <p className="text-red-600 text-sm">{error}</p>}
+          {error && <p className="text-sm" style={{ color: 'var(--clay-accent-soft-coral)' }}>{error}</p>}
 
           <button
             type="submit"
             disabled={loading || !email.trim() || !password.trim()}
-            className="w-full flex items-center justify-center gap-2 py-4 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 disabled:cursor-not-allowed text-white text-lg font-bold rounded-2xl transition-colors"
+            className="w-full flex items-center justify-center gap-2 py-4 px-4 text-white text-lg font-bold rounded-2xl transition-colors" style={{ background: 'var(--clay-accent-lavender)' }}
           >
             <LogIn className="w-5 h-5" />
             {loading ? "Signing in..." : "Sign In"}
