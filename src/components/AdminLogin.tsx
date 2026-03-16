@@ -82,7 +82,8 @@ export default function AdminLogin() {
     setGoogleLoading(true);
     setError("");
     try {
-      const res = await apiFetch("/api/admin/google/login-url");
+      const params = new URLSearchParams({ windowOrigin: window.location.origin });
+      const res = await apiFetch(`/api/admin/google/login-url?${params}`);
       const data = await res.json();
       if (!data.url) throw new Error("Failed to get Google login URL");
       const w = 500, h = 600;
@@ -102,7 +103,8 @@ export default function AdminLogin() {
     setGoogleLoading(true);
     setError("");
     try {
-      const res = await apiFetch("/api/admin/google/reset-url");
+      const params = new URLSearchParams({ windowOrigin: window.location.origin });
+      const res = await apiFetch(`/api/admin/google/reset-url?${params}`);
       const data = await res.json();
       if (!data.url) throw new Error("Failed to get Google verification URL");
       const w = 500, h = 600;
