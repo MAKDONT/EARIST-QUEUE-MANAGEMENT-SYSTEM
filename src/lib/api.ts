@@ -11,15 +11,20 @@ export const buildApiUrl = (path: string): string => {
 };
 
 export const apiFetch = (input: RequestInfo | URL, init?: RequestInit) => {
+  const requestInit: RequestInit = {
+    credentials: "include",
+    ...init,
+  };
+
   if (typeof input === "string") {
-    return fetch(buildApiUrl(input), init);
+    return fetch(buildApiUrl(input), requestInit);
   }
 
   if (input instanceof URL) {
-    return fetch(buildApiUrl(input.toString()), init);
+    return fetch(buildApiUrl(input.toString()), requestInit);
   }
 
-  return fetch(input, init);
+  return fetch(input, requestInit);
 };
 
 export const getWebSocketUrl = (): string => {

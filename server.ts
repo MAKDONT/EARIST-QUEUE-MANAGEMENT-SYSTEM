@@ -494,28 +494,46 @@ async function startServer() {
   app.set("trust proxy", 1);
 
   // --- CORS Configuration ---
-  const allowedOrigins = (process.env.ALLOWED_ORIGINS || "http://localhost:3000,http://localhost:5173").split(",").map(o => o.trim()).filter(Boolean);
+  const allowedOrigins = (
+    process.env.ALLOWED_ORIGINS ||
+    "http://localhost:3000,http://localhost:5173,*.vercel.app,*.onrender.com,*.railway.app,*.up.railway.app"
+  )
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean);
   
   app.use((req, res, next) => {
     const origin = req.get("origin");
     
     // Check if origin is in allowedOrigins
-    const isOriginAllowed = origin && allowedOrigins.some(allowed => {
-      // Handle wildcard in environment variable (e.g., "*.onrender.com")
-      if (allowed.startsWith("*.")) {
-        const domain = allowed.slice(2);
-        return origin.endsWith(domain) || origin.includes("." + domain);
+    const isOriginAllowed = !!origin && allowedOrigins.some((allowed) => {
+      if (!origin) return false;
+
+      if (allowed === "*") return true;
+
+      try {
+        const originUrl = new URL(origin);
+        const originHost = originUrl.hostname.toLowerCase();
+
+        // Handle wildcard in environment variable (e.g., "*.onrender.com").
+        if (allowed.startsWith("*.")) {
+          const domain = allowed.slice(2).toLowerCase();
+          return originHost === domain || originHost.endsWith(`.${domain}`);
+        }
+
+        // Allow bare hostnames in ALLOWED_ORIGINS (e.g., "my-app.vercel.app").
+        if (!allowed.includes("://")) {
+          const allowedHost = allowed.toLowerCase();
+          return originHost === allowedHost;
+        }
+
+        return origin === allowed;
+      } catch {
+        return false;
       }
-      return origin === allowed;
     });
     
-    // For production deployment, accept any onrender.com origin for the same app
-    const isProductionSelf = process.env.NODE_ENV === "production" && 
-                            origin && 
-                            origin.includes("onrender.com") && 
-                            origin.includes("kiosk-sp2");
-    
-    if (isOriginAllowed || isProductionSelf || !origin) {
+    if (isOriginAllowed || !origin) {
       if (origin) {
         res.setHeader("Access-Control-Allow-Origin", origin);
         res.setHeader("Access-Control-Allow-Credentials", "true");
