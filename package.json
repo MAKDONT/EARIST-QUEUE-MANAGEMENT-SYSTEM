@@ -9,6 +9,8 @@
   },
   "scripts": {
     "dev": "tsx server.ts",
+    "dev:frontend": "vite",
+    "dev:backend": "tsx server.ts",
     "start": "tsx server.ts",
     "build": "vite build",
     "preview": "vite preview",
