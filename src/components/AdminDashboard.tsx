@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Shield, LogOut, Plus, Building, UserPlus, ArrowLeft, Trash2, KeyRound, AlertTriangle, Users, FolderOpen, RefreshCw, Search, FileAudio, ExternalLink, Download, Mail, Eye, EyeOff } from "lucide-react";
 import { safeGetItem, safeClearStorage } from "../utils/storageUtils";
+import { apiFetch } from "../utils/api";
 
 interface LiveQueueItem {
   id: number;
@@ -307,7 +308,7 @@ export default function AdminDashboard() {
   const fetchLiveQueue = async (retries = 2, silent = false) => {
     if (!silent) setLiveQueueLoading(true);
     try {
-      const res = await fetch("/api/admin/queue-monitor", { credentials: "include" });
+      const res = await apiFetch("/api/admin/queue-monitor");
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const contentType = res.headers.get("content-type") || "";
       if (!contentType.includes("application/json")) {
@@ -678,7 +679,7 @@ export default function AdminDashboard() {
 
   const handleLogout = async () => {
     try {
-      await fetch("/api/admin/logout", {
+      await apiFetch("/api/admin/logout", {
         method: "POST",
         credentials: "include",
       });
@@ -1055,7 +1056,7 @@ export default function AdminDashboard() {
     setAdminPasswordSaving(true);
     setAdminPasswordError("");
     try {
-      const res = await fetch("/api/admin/password", {
+      const res = await apiFetch("/api/admin/password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -1074,7 +1075,7 @@ export default function AdminDashboard() {
 
   const fetchAdminEmail = async () => {
     try {
-      const res = await fetch("/api/admin/email");
+      const res = await apiFetch("/api/admin/email");
       const data = await res.json();
       setAdminEmail(data.email || "");
     } catch {
@@ -1097,7 +1098,7 @@ export default function AdminDashboard() {
     setAdminEmailError("");
     setAdminEmailSuccess(false);
     try {
-      const res = await fetch("/api/admin/email", {
+      const res = await apiFetch("/api/admin/email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
