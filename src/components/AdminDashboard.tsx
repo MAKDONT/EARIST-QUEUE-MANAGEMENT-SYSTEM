@@ -404,7 +404,19 @@ export default function AdminDashboard() {
       const authWindow = window.open(url, 'oauth_popup', 'width=600,height=700');
       if (!authWindow) {
         alert('Please allow popups for this site to connect your account.');
+        return;
       }
+
+      // Monitor the popup window and refresh status when it closes
+      const pollInterval = setInterval(() => {
+        if (authWindow.closed) {
+          clearInterval(pollInterval);
+          // Give backend a moment to save the tokens, then refresh
+          setTimeout(() => {
+            void checkDriveStatus();
+          }, 500);
+        }
+      }, 500);
     } catch (error) {
       console.error('OAuth error:', error);
       alert('Failed to initiate Google connection.');
