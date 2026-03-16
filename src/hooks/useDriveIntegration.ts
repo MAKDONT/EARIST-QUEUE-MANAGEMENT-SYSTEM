@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { apiFetch, apiJson } from "../utils/api";
 
 interface DriveRecording {
   id: string;
@@ -35,7 +36,7 @@ export function useDriveIntegration() {
 
   const checkDriveStatus = useCallback(async () => {
     try {
-      const res = await fetch(`/api/drive/status`);
+      const res = await apiFetch(`/api/drive/status`);
       if (!res.ok) {
         throw new Error(`HTTP error! status: ${res.status}`);
       }
@@ -55,7 +56,7 @@ export function useDriveIntegration() {
 
   const checkRecordingStorageStatus = useCallback(async () => {
     try {
-      const res = await fetch("/api/recordings/status");
+      const res = await apiFetch("/api/recordings/status");
       if (!res.ok) {
         const data = await res.json().catch(() => ({ error: `HTTP error! status: ${res.status}` }));
         throw new Error(data.error || "Supabase recording storage is unavailable.");
@@ -84,7 +85,7 @@ export function useDriveIntegration() {
     setDriveRecordingsError("");
     try {
       const query = pageToken ? `?pageToken=${encodeURIComponent(pageToken)}` : "";
-      const res = await fetch(`/api/recordings${query}`);
+      const res = await apiFetch(`/api/recordings${query}`);
       if (!res.ok) {
         const data = await res.json().catch(() => ({ error: `HTTP error! status: ${res.status}` }));
         throw new Error(data.error || "Failed to load consultation recordings.");
@@ -111,7 +112,7 @@ export function useDriveIntegration() {
 
   const handleConnectDrive = useCallback(async () => {
     try {
-      const response = await fetch(`/api/auth/google/url`);
+      const response = await apiFetch(`/api/auth/google/url`);
       if (!response.ok) throw new Error("Failed to get auth URL");
       const data = await response.json();
       const { url, mode, message } = data;
@@ -150,7 +151,7 @@ export function useDriveIntegration() {
       return;
 
     try {
-      const res = await fetch("/api/drive/disconnect", { method: "POST" });
+      const res = await apiFetch("/api/drive/disconnect", { method: "POST" });
       if (!res.ok) throw new Error("Failed to disconnect");
       await checkDriveStatus();
       alert("Google OAuth disconnected successfully.");

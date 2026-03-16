@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, LogIn, Users } from "lucide-react";
 import { getStaffSessionUserId, setStaffSession } from "../staffSession";
+import { apiFetch } from "../utils/api";
 
 export default function StaffLogin() {
   const navigate = useNavigate();
@@ -24,7 +25,7 @@ export default function StaffLogin() {
 
     try {
       const normalizedEmail = email.trim();
-      const res = await fetch("/api/faculty/login", {
+      const res = await apiFetch("/api/faculty/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: normalizedEmail, password }),

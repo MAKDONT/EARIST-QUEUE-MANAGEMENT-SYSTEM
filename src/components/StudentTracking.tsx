@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Clock, Video, CheckCircle, AlertCircle, RefreshCw, XCircle } from "lucide-react";
+import { apiFetch } from "../utils/api";
 
 interface Consultation {
   id: number;
@@ -25,7 +26,7 @@ export default function StudentTracking() {
 
   const fetchStatus = async () => {
     try {
-      const res = await fetch(`/api/queue/${id}`);
+      const res = await apiFetch(`/api/queue/${id}`);
       if (!res.ok) {
         throw new Error("Consultation not found");
       }

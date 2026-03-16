@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { apiFetch, apiJson } from "../utils/api";
 
 interface LiveQueueItem {
   id: number;
@@ -30,7 +31,7 @@ export function useLiveQueue() {
   }, []);
 
   const fetchLegacyLiveQueue = useCallback(async (): Promise<LiveQueueItem[]> => {
-    const facultyRes = await fetch("/api/faculty");
+    const facultyRes = await apiFetch("/api/faculty");
     if (!facultyRes.ok) throw new Error(`Faculty endpoint failed: ${facultyRes.status}`);
     const facultyData = await facultyRes.json();
     if (!Array.isArray(facultyData)) throw new Error("Faculty payload is not an array");
@@ -38,7 +39,7 @@ export function useLiveQueue() {
     const queueLists = await Promise.all(
       facultyData.map(async (f: any) => {
         try {
-          const queueRes = await fetch(`/api/faculty/${f.id}/queue`);
+          const queueRes = await apiFetch(`/api/faculty/${f.id}/queue`);
           if (!queueRes.ok) return [];
           const queueData = await queueRes.json();
           if (!Array.isArray(queueData)) return [];
@@ -69,7 +70,7 @@ export function useLiveQueue() {
     async (retries = 2, silent = false) => {
       if (!silent) setLiveQueueLoading(true);
       try {
-        const res = await fetch("/api/queue/monitor");
+        const res = await apiFetch("/api/queue/monitor");
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         const contentType = res.headers.get("content-type") || "";
         if (!contentType.includes("application/json")) {

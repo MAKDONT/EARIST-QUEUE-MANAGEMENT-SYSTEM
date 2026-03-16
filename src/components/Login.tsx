@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Users, LogIn, ScanLine, Keyboard, Clock } from "lucide-react";
+import { apiFetch, getApiUrl } from "../utils/api";
 
 interface Faculty {
   id: string;
@@ -62,8 +63,11 @@ export default function Login() {
     fetchDepartments();
     fetchLiveQueue();
     
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(`${protocol}//${window.location.host}`);
+    // Connect to backend WebSocket
+    const apiUrl = getApiUrl("");
+    const wsProtocol = apiUrl.startsWith("https") ? "wss:" : "ws:";
+    const wsHost = new URL(apiUrl).host;
+    const ws = new WebSocket(wsProtocol + "//" + wsHost);
     
     ws.onmessage = (event) => {
       try {
@@ -97,8 +101,8 @@ export default function Login() {
 
   const fetchFaculty = async (retries = 3) => {
     try {
-      const res = await fetch("/api/faculty");
-      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      const res = await apiFetch("/api/faculty");
+      if (!res.ok) throw new Error("HTTP error! status: " + res.status);
       const data = await res.json();
       if (Array.isArray(data)) {
         setFaculty(data);
@@ -113,8 +117,8 @@ export default function Login() {
 
   const fetchDepartments = async (retries = 3) => {
     try {
-      const res = await fetch("/api/departments");
-      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      const res = await apiFetch("/api/departments");
+      if (!res.ok) throw new Error("HTTP error! status: " + res.status);
       const data = await res.json();
       if (Array.isArray(data)) {
         setDepartments(data);
@@ -130,8 +134,8 @@ export default function Login() {
   const fetchLiveQueue = async (retries = 2, silent = false) => {
     if (!silent) setLiveQueueLoading(true);
     try {
-      const res = await fetch("/api/queue/monitor");
-      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+      const res = await apiFetch("/api/queue/monitor");
+      if (!res.ok) throw new Error("HTTP error! status: " + res.status);
       const contentType = res.headers.get("content-type") || "";
       if (!contentType.includes("application/json")) {
         throw new Error("Queue monitor endpoint returned non-JSON response");
@@ -172,15 +176,15 @@ export default function Login() {
   };
 
   const fetchLegacyLiveQueue = async (): Promise<LiveQueueItem[]> => {
-    const facultyRes = await fetch("/api/faculty");
-    if (!facultyRes.ok) throw new Error(`Faculty endpoint failed: ${facultyRes.status}`);
+    const facultyRes = await apiFetch("/api/faculty");
+    if (!facultyRes.ok) throw new Error("Faculty endpoint failed: " + facultyRes.status);
     const facultyData = await facultyRes.json();
     if (!Array.isArray(facultyData)) throw new Error("Faculty payload is not an array");
 
     const queueLists = await Promise.all(
       facultyData.map(async (f: any) => {
         try {
-          const queueRes = await fetch(`/api/faculty/${f.id}/queue`);
+          const queueRes = await apiFetch("/api/faculty/" + f.id + "/queue");
           if (!queueRes.ok) return [];
           const queueData = await queueRes.json();
           if (!Array.isArray(queueData)) return [];
@@ -241,8 +245,10 @@ export default function Login() {
       return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true });
     };
 
-    return todaySlots.map((slot) => `${formatTime(slot.start)} - ${formatTime(slot.end)}`).join(", ");
+    return todaySlots.map((slot) => formatTime(slot.start) + " - " + formatTime(slot.end)).join(", ");
   };
+
+  const availableFaculty = faculty.filter((f) => getTodayAvailabilitySlots(f).length > 0);
 
   const completeStudentLogin = useCallback(async (studentIdentifier: string, mode: "scan" | "manual") => {
     const normalizedIdentifier = studentIdentifier.trim();
@@ -257,7 +263,7 @@ export default function Login() {
 
     if (mode === "scan") {
       // Check if student exists
-      const res = await fetch(`/api/students/${encodeURIComponent(normalizedIdentifier)}`);
+      const res = await apiFetch("/api/students/" + encodeURIComponent(normalizedIdentifier));
       if (!res.ok) {
         throw new Error("Student not found in database. Please use Manual Input.");
       }
@@ -280,13 +286,13 @@ export default function Login() {
     localStorage.setItem("user_role", "student");
 
     // Check for active queue
-    const queueRes = await fetch(`/api/student/${encodeURIComponent(normalizedIdentifier)}/active-queue`);
+    const queueRes = await apiFetch("/api/student/" + encodeURIComponent(normalizedIdentifier) + "/active-queue");
     const queueData = await queueRes.json();
 
     if (queueRes.ok && queueData.id) {
-      navigate(`/student/${queueData.id}`);
+      navigate("/student/" + queueData.id);
     } else {
-      navigate(`/kiosk`);
+      navigate("/kiosk");
     }
   }, [faculty, course, navigate, studentEmail, studentName]);
 
@@ -413,7 +419,6 @@ export default function Login() {
     }
   };
 
-  const availableFaculty = faculty.filter((f) => getTodayAvailabilitySlots(f).length > 0);
   const servingStudents = liveQueue.filter((item) => item.status === "serving");
   const waitingStudents = liveQueue.filter((item) => item.status === "waiting");
   const activeStudents = [...servingStudents, ...waitingStudents];

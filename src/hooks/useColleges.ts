@@ -1,5 +1,6 @@
 import type React from "react";
 import { useState, useCallback } from "react";
+import { apiFetch, apiJson } from "../utils/api";
 
 export function useColleges() {
   const [colleges, setColleges] = useState<any[]>([]);
@@ -16,7 +17,7 @@ export function useColleges() {
 
   const fetchColleges = useCallback(async (retries = 3) => {
     try {
-      const res = await fetch("/api/colleges");
+      const res = await apiFetch("/api/colleges");
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       if (Array.isArray(data)) {
@@ -47,7 +48,7 @@ export function useColleges() {
 
     setAddingCollege(true);
     try {
-      const res = await fetch("/api/colleges", {
+      const res = await apiFetch("/api/colleges", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: collegeName.trim(), code: collegeCode.trim() }),
@@ -68,7 +69,7 @@ export function useColleges() {
 
   const handleDeleteCollege = useCallback(async () => {
     try {
-      const res = await fetch(`/api/colleges/${deleteCollegeModal.id}`, { method: "DELETE" });
+      const res = await apiFetch(`/api/colleges/${deleteCollegeModal.id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete college");
       await fetchColleges();
       setDeleteCollegeModal({ isOpen: false, id: "", name: "" });
@@ -106,7 +107,7 @@ export function useColleges() {
     setEditCollegeSaving(true);
     setEditCollegeError("");
     try {
-      const res = await fetch(`/api/colleges/${editCollegeModal.id}`, {
+      const res = await apiFetch(`/api/colleges/${editCollegeModal.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, code }),

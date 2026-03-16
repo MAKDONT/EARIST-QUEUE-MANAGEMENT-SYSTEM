@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Users, CheckCircle, Video, XCircle, ChevronRight, Clock, ArrowLeft, LogOut, KeyRound, AlertTriangle, Eye, EyeOff } from "lucide-react";
 import { clearStaffSession, getStaffSessionUserId } from "../staffSession";
+import { apiFetch, apiJson, apiUpload, getApiUrl } from "../utils/api";
 
 interface Consultation {
   id: number;
@@ -251,7 +252,7 @@ export default function FacultyDashboard() {
 
   const fetchFaculty = async (retries = 3) => {
     try {
-      const res = await fetch("/api/faculty");
+      const res = await apiFetch("/api/faculty");
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       if (Array.isArray(data)) {
@@ -269,7 +270,7 @@ export default function FacultyDashboard() {
 
   const fetchQueue = async (retries = 3) => {
     try {
-      const res = await fetch(`/api/faculty/${selectedFaculty}/queue`);
+      const res = await apiFetch(`/api/faculty/${selectedFaculty}/queue`);
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       if (Array.isArray(data)) {
@@ -302,7 +303,7 @@ export default function FacultyDashboard() {
     if (!selectedFaculty) return;
 
     try {
-      const res = await fetch(`/api/faculty/${selectedFaculty}/google/status`);
+      const res = await apiFetch(`/api/faculty/${selectedFaculty}/google/status`);
       const data = await readJsonResponse(res, "Failed to load Google Meet connection status.");
       if (!res.ok) {
         throw new Error(typeof data.error === "string" ? data.error : "Failed to load Google Meet connection status.");
@@ -323,7 +324,7 @@ export default function FacultyDashboard() {
 
   const checkRecordingStorageStatus = async () => {
     try {
-      const res = await fetch(`/api/recordings/status`);
+      const res = await apiFetch(`/api/recordings/status`);
       const data = await readJsonResponse(res, "Failed to load recording storage status.");
       if (!res.ok) {
         throw new Error(typeof data.error === "string" ? data.error : `HTTP error! status: ${res.status}`);
@@ -343,7 +344,7 @@ export default function FacultyDashboard() {
 
     setGoogleMeetLoading(true);
     try {
-      const response = await fetch(`/api/faculty/${selectedFaculty}/google/url`);
+      const response = await apiFetch(`/api/faculty/${selectedFaculty}/google/url`);
       const contentType = response.headers.get("content-type") || "";
       const data = contentType.includes("application/json")
         ? await response.json().catch(() => ({}))
@@ -377,7 +378,7 @@ export default function FacultyDashboard() {
 
     setGoogleMeetLoading(true);
     try {
-      const res = await fetch(`/api/faculty/${selectedFaculty}/google/disconnect`, { method: "POST" });
+      const res = await apiFetch(`/api/faculty/${selectedFaculty}/google/disconnect`, { method: "POST" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(data.error || "Failed to disconnect Google.");
@@ -530,14 +531,10 @@ export default function FacultyDashboard() {
     }
 
     try {
-      const res = await fetch('/api/recordings/upload', {
-        method: 'POST',
-        body: formData
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.success) {
+      const res = await apiUpload('/api/recordings/upload', formData);
+      if (!res.success) {
         setRecordingStorageReady(false);
-        throw new Error(data.error || "Upload failed");
+        throw new Error(res.error || "Upload failed");
       }
       setRecordingStorageReady(true);
     } catch (err) {
@@ -687,7 +684,7 @@ export default function FacultyDashboard() {
 
   const updateStatus = async (id: number, status: string, link?: string, autoCallNext: boolean = false, recordingEnabled: boolean = false) => {
     try {
-      const res = await fetch(`/api/queue/${id}/status`, {
+      const res = await apiFetch(`/api/queue/${id}/status`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status, meet_link: link, recording_enabled: recordingEnabled }),
@@ -732,7 +729,7 @@ export default function FacultyDashboard() {
   };
 
   const createMeetLink = async (consultationId: number) => {
-    const res = await fetch(`/api/queue/${consultationId}/meet-link`, {
+    const res = await apiFetch(`/api/queue/${consultationId}/meet-link`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
     });
@@ -872,7 +869,7 @@ export default function FacultyDashboard() {
     if (!selectedFacultyData) return;
     const newStatus = selectedFacultyData.status === 'available' ? 'offline' : 'available';
     try {
-      await fetch(`/api/faculty/${selectedFaculty}/status`, {
+      const response = await apiFetch(`/api/faculty/${selectedFaculty}/status`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),
@@ -900,7 +897,7 @@ export default function FacultyDashboard() {
 
   const saveAvailability = async () => {
     try {
-      await fetch(`/api/faculty/${selectedFaculty}/availability`, {
+      await apiFetch(`/api/faculty/${selectedFaculty}/availability`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ availability: availabilitySlots }),
@@ -972,7 +969,7 @@ export default function FacultyDashboard() {
 
     setPasswordSaving(true);
     try {
-      const response = await fetch(`/api/faculty/${selectedFaculty}/change-password`, {
+      const response = await apiFetch(`/api/faculty/${selectedFaculty}/change-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: passwordInput }),

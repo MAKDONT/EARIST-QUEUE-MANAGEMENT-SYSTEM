@@ -1,0 +1,25 @@
+# Backend files - not needed for Vercel frontend
+server.ts
+test*.ts
+test*.js
+update-faculty.ts
+check-*.ts
+fetch-*.ts
+fetch-*.js
+
+# Backend test/utility scripts
+supabase-schema.sql
+RAILWAY_DEPLOYMENT.md
+RENDER_DEPLOYMENT.md
+
+# Local files
+.env.local
+.env.production.local
+drive-tokens.json
+faculty-google-tokens.json
+uploads/
+
+# Development
+node_modules/
+.git
+.gitignore

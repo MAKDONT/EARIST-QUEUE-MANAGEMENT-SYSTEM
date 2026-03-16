@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { apiFetch, apiJson } from "../utils/api";
 
 export function useAdminSettings() {
   const [adminPassword, setAdminPassword] = useState("");
@@ -20,7 +21,7 @@ export function useAdminSettings() {
 
   const fetchAdminEmail = useCallback(async () => {
     try {
-      const res = await fetch("/api/admin/email");
+      const res = await apiFetch("/api/admin/email");
       const data = await res.json();
       setAdminEmail(data.email || "");
     } catch {
@@ -45,7 +46,7 @@ export function useAdminSettings() {
     setAdminPasswordSaving(true);
     setAdminPasswordError("");
     try {
-      const res = await fetch("/api/admin/password", {
+      const res = await apiFetch("/api/admin/password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: adminPasswordInput }),
@@ -75,7 +76,7 @@ export function useAdminSettings() {
     setAdminEmailError("");
     setAdminEmailSuccess(false);
     try {
-      const res = await fetch("/api/admin/email", {
+      const res = await apiFetch("/api/admin/email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),

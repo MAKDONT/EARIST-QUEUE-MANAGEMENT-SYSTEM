@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from "react";
+import { apiFetch, apiJson } from "../utils/api";
 
 export function useDepartments(colleges: any[]) {
   const [departments, setDepartments] = useState<any[]>([]);
@@ -16,7 +17,7 @@ export function useDepartments(colleges: any[]) {
 
   const fetchDepartments = useCallback(async (retries = 3) => {
     try {
-      const res = await fetch("/api/departments");
+      const res = await apiFetch("/api/departments");
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       if (Array.isArray(data)) {
@@ -55,7 +56,7 @@ export function useDepartments(colleges: any[]) {
 
     setAddingDept(true);
     try {
-      const res = await fetch("/api/departments", {
+      const res = await apiFetch("/api/departments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: deptName.trim(), code: deptCode.trim(), college_id: collegeId }),
@@ -76,7 +77,7 @@ export function useDepartments(colleges: any[]) {
 
   const handleDeleteDepartment = useCallback(async () => {
     try {
-      const res = await fetch(`/api/departments/${deleteDepartmentModal.id}`, { method: "DELETE" });
+      const res = await apiFetch(`/api/departments/${deleteDepartmentModal.id}`, { method: "DELETE" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Failed to delete department");
       await fetchDepartments();
@@ -116,7 +117,7 @@ export function useDepartments(colleges: any[]) {
     setEditDepartmentSaving(true);
     setEditDepartmentError("");
     try {
-      const res = await fetch(`/api/departments/${editDepartmentModal.id}`, {
+      const res = await apiFetch(`/api/departments/${editDepartmentModal.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, college_id }),

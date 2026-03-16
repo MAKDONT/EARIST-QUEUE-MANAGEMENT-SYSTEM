@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from "react";
+import { apiFetch, apiJson } from "../utils/api";
 
 export function useFaculties() {
   const [faculties, setFaculties] = useState<any[]>([]);
@@ -24,7 +25,7 @@ export function useFaculties() {
 
   const fetchFaculties = useCallback(async (retries = 3) => {
     try {
-      const res = await fetch("/api/faculty");
+      const res = await apiFetch("/api/faculty");
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       if (Array.isArray(data)) {
@@ -81,7 +82,7 @@ export function useFaculties() {
     setAddingFac(true);
     try {
       const id = crypto.randomUUID();
-      const res = await fetch("/api/faculty", {
+      const res = await apiFetch("/api/faculty", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -143,7 +144,7 @@ export function useFaculties() {
     setEditFacultyProfileSaving(true);
     setEditFacultyProfileError("");
     try {
-      const res = await fetch(`/api/faculty/${editFacultyProfileModal.id}`, {
+      const res = await apiFetch(`/api/faculty/${editFacultyProfileModal.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email }),
@@ -191,7 +192,7 @@ export function useFaculties() {
     setFacultyPasswordSaving(true);
     setFacultyPasswordError("");
     try {
-      const res = await fetch(`/api/faculty/${editFacultyPasswordModal.id}/password`, {
+      const res = await apiFetch(`/api/faculty/${editFacultyPasswordModal.id}/password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password: facultyPasswordInput }),
@@ -209,7 +210,7 @@ export function useFaculties() {
 
   const handleDeleteFaculty = useCallback(async () => {
     try {
-      const res = await fetch(`/api/faculty/${deleteFacultyModal.id}`, { method: "DELETE" });
+      const res = await apiFetch(`/api/faculty/${deleteFacultyModal.id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete faculty");
       await fetchFaculties();
       setDeleteFacultyModal({ isOpen: false, id: "", name: "" });

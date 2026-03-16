@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, LogIn, Shield, KeyRound, Mail, Eye, EyeOff } from "lucide-react";
 import { safeGetItem } from "../utils/storageUtils";
+import { apiFetch } from "../utils/api";
 
 export default function AdminLogin() {
   const navigate = useNavigate();
@@ -60,10 +61,9 @@ export default function AdminLogin() {
     setError("");
 
     try {
-      const res = await fetch("/api/admin/login", {
+      const res = await apiFetch("/api/admin/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify({ password }),
       });
       const data = await res.json();
@@ -82,7 +82,7 @@ export default function AdminLogin() {
     setGoogleLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/admin/google/login-url");
+      const res = await apiFetch("/api/admin/google/login-url");
       const data = await res.json();
       if (!data.url) throw new Error("Failed to get Google login URL");
       const w = 500, h = 600;
@@ -102,7 +102,7 @@ export default function AdminLogin() {
     setGoogleLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/admin/google/reset-url");
+      const res = await apiFetch("/api/admin/google/reset-url");
       const data = await res.json();
       if (!data.url) throw new Error("Failed to get Google verification URL");
       const w = 500, h = 600;
@@ -131,7 +131,7 @@ export default function AdminLogin() {
     }
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/reset-password", {
+      const res = await apiFetch("/api/admin/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: resetEmail, new_password: newPassword }),
