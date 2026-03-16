@@ -232,7 +232,7 @@ export default function AdminDashboard() {
 
   const checkDriveStatus = async () => {
     try {
-      const res = await fetch(`/api/drive/status`);
+      const res = await apiFetch(`/api/drive/status`);
       if (!res.ok) {
         throw new Error(`HTTP error! status: ${res.status}`);
       }
@@ -252,7 +252,7 @@ export default function AdminDashboard() {
 
   const checkRecordingStorageStatus = async () => {
     try {
-      const res = await fetch("/api/recordings/status");
+      const res = await apiFetch("/api/recordings/status");
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(data.error || "Supabase recording storage is unavailable.");
@@ -281,7 +281,7 @@ export default function AdminDashboard() {
 
     try {
       const query = pageToken ? `?pageToken=${encodeURIComponent(pageToken)}` : "";
-      const res = await fetch(`/api/recordings${query}`);
+      const res = await apiFetch(`/api/recordings${query}`);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(data.error || "Failed to load consultation recordings.");
@@ -350,7 +350,7 @@ export default function AdminDashboard() {
   };
 
   const fetchLegacyLiveQueue = async (): Promise<LiveQueueItem[]> => {
-    const facultyRes = await fetch("/api/faculty", { credentials: "include" });
+    const facultyRes = await apiFetch("/api/faculty", { credentials: "include" });
     if (!facultyRes.ok) throw new Error(`Faculty endpoint failed: ${facultyRes.status}`);
     const facultyData = await facultyRes.json();
     if (!Array.isArray(facultyData)) throw new Error("Faculty payload is not an array");
@@ -358,7 +358,7 @@ export default function AdminDashboard() {
     const queueLists = await Promise.all(
       facultyData.map(async (f: any) => {
         try {
-          const queueRes = await fetch(`/api/faculty/${f.id}/queue`, { credentials: "include" });
+          const queueRes = await apiFetch(`/api/faculty/${f.id}/queue`, { credentials: "include" });
           if (!queueRes.ok) return [];
           const queueData = await queueRes.json();
           if (!Array.isArray(queueData)) return [];
@@ -387,7 +387,7 @@ export default function AdminDashboard() {
 
   const handleConnectDrive = async () => {
     try {
-      const response = await fetch(`/api/auth/google/url`);
+      const response = await apiFetch(`/api/auth/google/url`);
       if (!response.ok) throw new Error('Failed to get auth URL');
       const data = await response.json();
       const { url, mode, message } = data;
@@ -433,7 +433,7 @@ export default function AdminDashboard() {
     if (!confirm("Are you sure you want to disconnect Google? Meet links will not auto-generate until you reconnect. Recordings will continue saving to Supabase Storage.")) return;
     
     try {
-      const res = await fetch("/api/drive/disconnect", { method: "POST", credentials: "include" });
+      const res = await apiFetch("/api/drive/disconnect", { method: "POST", credentials: "include" });
       if (!res.ok) throw new Error("Failed to disconnect");
       await checkDriveStatus();
       alert("Google OAuth disconnected successfully.");
@@ -445,7 +445,7 @@ export default function AdminDashboard() {
 
   const fetchFaculties = async (retries = 3) => {
     try {
-      const res = await fetch("/api/faculty", { credentials: "include" });
+      const res = await apiFetch("/api/faculty", { credentials: "include" });
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       if (Array.isArray(data)) {
@@ -461,7 +461,7 @@ export default function AdminDashboard() {
 
   const fetchColleges = async (retries = 3) => {
     try {
-      const res = await fetch("/api/colleges", { credentials: "include" });
+      const res = await apiFetch("/api/colleges", { credentials: "include" });
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       if (Array.isArray(data)) {
@@ -480,7 +480,7 @@ export default function AdminDashboard() {
 
   const fetchDepartments = async (retries = 3) => {
     try {
-      const res = await fetch("/api/departments", { credentials: "include" });
+      const res = await apiFetch("/api/departments", { credentials: "include" });
       if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
       const data = await res.json();
       if (Array.isArray(data)) {
@@ -520,7 +520,7 @@ export default function AdminDashboard() {
 
     setAddingCollege(true);
     try {
-      const res = await fetch("/api/colleges", {
+      const res = await apiFetch("/api/colleges", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -572,7 +572,7 @@ export default function AdminDashboard() {
 
     setAddingDept(true);
     try {
-      const res = await fetch("/api/departments", {
+      const res = await apiFetch("/api/departments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -645,7 +645,7 @@ export default function AdminDashboard() {
     setAddingFac(true);
     try {
       const id = crypto.randomUUID();
-      const res = await fetch("/api/faculty", {
+      const res = await apiFetch("/api/faculty", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -697,7 +697,7 @@ export default function AdminDashboard() {
       return;
     }
     try {
-      const res = await fetch(`/api/colleges/${deleteCollegeModal.id}`, {
+      const res = await apiFetch(`/api/colleges/${deleteCollegeModal.id}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -757,7 +757,7 @@ export default function AdminDashboard() {
     setEditCollegeSaving(true);
     setEditCollegeError("");
     try {
-      const res = await fetch(`/api/colleges/${editCollegeModal.id}`, {
+      const res = await apiFetch(`/api/colleges/${editCollegeModal.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -820,7 +820,7 @@ export default function AdminDashboard() {
     setEditDepartmentSaving(true);
     setEditDepartmentError("");
     try {
-      const res = await fetch(`/api/departments/${editDepartmentModal.id}`, {
+      const res = await apiFetch(`/api/departments/${editDepartmentModal.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -848,7 +848,7 @@ export default function AdminDashboard() {
       return;
     }
     try {
-      const res = await fetch(`/api/departments/${deleteDepartmentModal.id}`, {
+      const res = await apiFetch(`/api/departments/${deleteDepartmentModal.id}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -925,7 +925,7 @@ export default function AdminDashboard() {
     setEditFacultyProfileSaving(true);
     setFacultyPasswordError("");
     try {
-      const res = await fetch(`/api/faculty/${editFacultyPasswordModal.id}`, {
+      const res = await apiFetch(`/api/faculty/${editFacultyPasswordModal.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -953,7 +953,7 @@ export default function AdminDashboard() {
       return;
     }
     try {
-      const res = await fetch(`/api/faculty/${deleteFacultyModal.id}`, {
+      const res = await apiFetch(`/api/faculty/${deleteFacultyModal.id}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -1005,7 +1005,7 @@ export default function AdminDashboard() {
     setFacultyPasswordSaving(true);
     setFacultyPasswordError("");
     try {
-      const res = await fetch(`/api/faculty/${editFacultyPasswordModal.id}/password`, {
+      const res = await apiFetch(`/api/faculty/${editFacultyPasswordModal.id}/password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

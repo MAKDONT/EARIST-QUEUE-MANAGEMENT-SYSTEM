@@ -205,7 +205,7 @@ export default function KioskView() {
     setError("");
 
     try {
-      const res = await fetch("/api/queue/join", {
+      const res = await apiFetch("/api/queue/join", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
